@@ -3,6 +3,18 @@
 Alloy is a fork of T3 Code that adds an Agents view. It otherwise tracks
 [pingdotgg/t3code](https://github.com/pingdotgg/t3code).
 
+## Why Alloy
+
+An alloy is separate metals fused into something stronger than any of them
+alone. Claude, Codex, Grok, and whatever comes next each have strengths. Alloy
+runs my own agents on any of them, lets me decide how they work, how much they
+say, and when a job counts as done, and shows the agents and the code they
+write in one place.
+
+T3 Code already runs each provider through its official harness on my own
+subscriptions. Alloy builds the agent layer on top and keeps taking T3's
+updates.
+
 ## Rule
 
 Fork code lives in `apps/mobile/src/fork/` (and later `apps/server/src/fork/`).
