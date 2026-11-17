@@ -44,6 +44,10 @@ import {
   useSystemWorkspaceTabBar,
 } from "./useSystemWorkspaceTabBar";
 import { openSettings } from "../../settings/settings-navigation";
+import { useAtomValue } from "@effect/atom-react";
+import { AgentsScreen } from "../../../fork/agents/AgentsScreen";
+import { WorkspaceModePicker } from "../../../fork/agents/WorkspaceModePicker";
+import { workspaceModeAtom } from "../../../fork/agents/workspace-mode";
 
 const TAB_TITLES = WORKSPACE_TAB_LABELS;
 
@@ -59,6 +63,13 @@ function WorkspaceRootTitle(props: {
     : enabled.length
       ? TAB_TITLES[state.selectedTab]
       : "Navigation";
+  if (!settingsOpen && state.selectedTab === "threads") {
+    return (
+      <View style={{ width: maxWidth, minHeight: 32, justifyContent: "center" }}>
+        <WorkspaceModePicker />
+      </View>
+    );
+  }
   return (
     <View style={{ width: maxWidth, minHeight: 32, justifyContent: "center" }}>
       <WorkspaceConnectionTitle
@@ -102,6 +113,7 @@ function WorkspaceRootContent() {
   // Settings is a workspace tab too; its list takes the place of the selected tab's.
   const settingsOpen = workspace.settingsOpen;
   const headerOnly = use(NativeWorkspaceTabActivityContext)?.headerOnly === true;
+  const workspaceMode = useAtomValue(workspaceModeAtom);
   const renderHeaderTitle = () => (
     <WorkspaceRootTitle
       columnWidth={width}
@@ -167,7 +179,11 @@ function WorkspaceRootContent() {
           ) : enabled.length === 0 ? (
             <WorkspaceNoTabs />
           ) : state.selectedTab === "threads" ? (
-            <HomeRouteScreen />
+            workspaceMode === "agents" ? (
+              <AgentsScreen />
+            ) : (
+              <HomeRouteScreen />
+            )
           ) : state.selectedTab === "pullRequests" ? (
             <PullRequestsScreen />
           ) : state.selectedTab === "issues" ? (

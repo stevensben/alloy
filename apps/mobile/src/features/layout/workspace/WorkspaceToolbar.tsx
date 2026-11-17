@@ -21,6 +21,7 @@ import { shouldRestoreNativeSearch } from "./workspace-tabs-state";
 import { useFloatingWorkspaceTabs, useSidebarWorkspaceTabs } from "./useSystemWorkspaceTabBar";
 import { WorkspaceTabToolbarButtons } from "./WorkspaceSectionToolbar";
 import { useWorkspaceCompose } from "./useWorkspaceCompose";
+import { useHomeScopeMenus } from "../../../fork/agents/useHomeScopeMenus";
 
 const SEARCH_LABELS = {
   threads: "Search threads",
@@ -41,6 +42,7 @@ export function WorkspaceToolbar(props: {
   const duoSearch = NATIVE_LIQUID_GLASS_SUPPORTED && isDuoDevice(deviceType);
   const bottomSearch = duoSearch && sidebarTabs !== "picker";
   const compose = useWorkspaceCompose();
+  const scopeMenus = useHomeScopeMenus();
   // On the Duo, compose sits in the list's bar when folded and the detail column's when unfolded.
   const nativeToolbarCompose =
     deviceType === "duo-folded" && compose !== null && activeNewTask === null;
@@ -197,6 +199,7 @@ export function WorkspaceToolbar(props: {
           {searchButton}
           {nativeToolbarCompose && foldedSearch ? <Toolbar.Spacer width={8} /> : null}
           {composeButton}
+          {selectedTab === "threads" && deviceType === "phone" ? scopeMenus : null}
           {compose === null ||
           isDuoDevice(deviceType) ||
           (deviceType === "pad" && layout.usesSplitView) ||
