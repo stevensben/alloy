@@ -1,0 +1,234 @@
+import { ProjectId } from "@t3tools/contracts";
+import {
+  AlloyCompanyId,
+  AlloyGoalId,
+  AlloyMilestoneId,
+  type AlloyAccount,
+  type AlloyGoal,
+  type AlloyMilestone,
+  type AlloyScore,
+} from "@t3tools/contracts/alloy";
+import { ProviderInstanceId } from "@t3tools/contracts";
+import { describe, expect, it } from "vite-plus/test";
+
+import {
+  accountUsageSummary,
+  chooseAlloyEnvironment,
+  currentMilestone,
+  formatDuration,
+  formatResetsIn,
+  goalMilestones,
+  groupGoalsByCompany,
+  modelLabel,
+  moveItem,
+  roadmapProgress,
+  scoreboard,
+  scoreSummary,
+  toggleChoice,
+} from "./alloy-model";
+
+const NOW = Date.parse("2026-11-17T12:00:00.000Z");
+const instance = ProviderInstanceId.make("claude-work");
+
+function goal(id: string, companyId: string, status: AlloyGoal["status"], updatedAt: string) {
+  return {
+    id: AlloyGoalId.make(id),
+    companyId: AlloyCompanyId.make(companyId),
+    projectId: ProjectId.make("project"),
+    title: id,
+    vision: "",
+    status,
+    orchestrator: null,
+    createdAt: updatedAt,
+    updatedAt,
+  } satisfies AlloyGoal;
+}
+
+function milestone(
+  position: number,
+  status: AlloyMilestone["status"],
+  goalId = "goal",
+): AlloyMilestone {
+  return {
+    id: AlloyMilestoneId.make(`m${position}`),
+    goalId: AlloyGoalId.make(goalId),
+    position,
+    title: `Milestone ${position}`,
+    doneWhen: "",
+    status,
+    progress: null,
+    note: null,
+  };
+}
+
+function account(usage: AlloyAccount["usage"], available = true): AlloyAccount {
+  return {
+    instanceId: instance,
+    label: "Work",
+    driver: "claude",
+    available,
+    models: [{ slug: "opus", name: "Claude Opus" }],
+    usage,
+  };
+}
+
+function score(taskType: string, model: string, kept: number, decided: number, runs: number) {
+  return {
+    taskType,
+    model: { instanceId: instance, model },
+    runs,
+    decided,
+    kept,
+    avgDurationMs: null,
+  } satisfies AlloyScore;
+}
+
+describe("chooseAlloyEnvironment", () => {
+  const env = (environmentId: string, probe: "pending" | "alloy" | "other") => ({
+    environmentId,
+    probe,
+  });
+
+  it("prefers the selected environment once it answers", () => {
+    expect(chooseAlloyEnvironment([env("a", "alloy"), env("b", "alloy")], "b")).toEqual({
+      _tag: "found",
+      environmentId: "b",
+    });
+  });
+
+  it("waits for the selected environment before falling back", () => {
+    expect(chooseAlloyEnvironment([env("a", "alloy"), env("b", "pending")], "b")).toEqual({
+      _tag: "probing",
+    });
+  });
+
+  it("falls back to the first Alloy environment when the selected one is not Alloy", () => {
+    expect(
+      chooseAlloyEnvironment([env("a", "other"), env("b", "alloy"), env("c", "alloy")], "a"),
+    ).toEqual({ _tag: "found", environmentId: "b" });
+  });
+
+  it("keeps probing while any environment is unanswered, then reports none", () => {
+    expect(chooseAlloyEnvironment([env("a", "other"), env("b", "pending")], null)).toEqual({
+      _tag: "probing",
+    });
+    expect(chooseAlloyEnvironment([env("a", "other")], null)).toEqual({ _tag: "none" });
+    expect(chooseAlloyEnvironment([], null)).toEqual({ _tag: "none" });
+  });
+});
+
+describe("goals", () => {
+  it("groups by company name and orders running before paused, draft and done", () => {
+    const groups = groupGoalsByCompany({
+      companies: [
+        { id: AlloyCompanyId.make("z"), name: "Zeta", modelRanking: [], createdAt: "" },
+        { id: AlloyCompanyId.make("a"), name: "Acme", modelRanking: [], createdAt: "" },
+        { id: AlloyCompanyId.make("e"), name: "Empty", modelRanking: [], createdAt: "" },
+      ],
+      goals: [
+        goal("done", "a", "done", "2026-11-17T11:00:00Z"),
+        goal("old-running", "a", "running", "2026-11-16T00:00:00Z"),
+        goal("new-running", "a", "running", "2026-11-17T00:00:00Z"),
+        goal("paused", "a", "paused", "2026-11-17T10:00:00Z"),
+        goal("zeta", "z", "draft", "2026-11-17T10:00:00Z"),
+      ],
+    });
+    expect(groups.map((group) => group.company.name)).toEqual(["Acme", "Zeta"]);
+    expect(groups[0]!.goals.map((entry) => entry.id)).toEqual([
+      "new-running",
+      "old-running",
+      "paused",
+      "done",
+    ]);
+  });
+
+  it("orders the roadmap and finds progress and the current milestone", () => {
+    const roadmap = goalMilestones(
+      [
+        milestone(2, "upcoming"),
+        milestone(0, "done"),
+        milestone(1, "current"),
+        milestone(0, "done", "other"),
+      ],
+      AlloyGoalId.make("goal"),
+    );
+    expect(roadmap.map((entry) => entry.position)).toEqual([0, 1, 2]);
+    expect(roadmapProgress(roadmap)).toEqual({ done: 1, total: 3 });
+    expect(currentMilestone(roadmap)?.position).toBe(1);
+    expect(currentMilestone([milestone(0, "done"), milestone(1, "upcoming")])?.position).toBe(1);
+    expect(currentMilestone([milestone(0, "done")])).toBeNull();
+  });
+});
+
+describe("accounts", () => {
+  it("formats when usage resets", () => {
+    expect(formatResetsIn(null, NOW)).toBeNull();
+    expect(formatResetsIn("2026-11-17T11:59:00Z", NOW)).toBe("resets now");
+    expect(formatResetsIn("2026-11-17T12:45:00Z", NOW)).toBe("resets in 45m");
+    expect(formatResetsIn("2026-11-17T14:10:00Z", NOW)).toBe("resets in 2h");
+    expect(formatResetsIn("2026-11-21T12:00:00Z", NOW)).toBe("resets in 4d");
+  });
+
+  it("summarizes the most used window", () => {
+    expect(
+      accountUsageSummary(
+        account([
+          { label: "5h", usedPercent: 20, resetsAt: "2026-11-17T13:00:00Z" },
+          { label: "week", usedPercent: 71.6, resetsAt: "2026-11-19T12:00:00Z" },
+        ]),
+        NOW,
+      ),
+    ).toBe("72% of week · resets in 2d");
+    expect(accountUsageSummary(account([]), NOW)).toBe("No usage reported");
+    expect(accountUsageSummary(account([], false), NOW)).toBe("Unavailable");
+  });
+
+  it("labels a model with its account and falls back to the slug", () => {
+    const accounts = [account([])];
+    expect(modelLabel(accounts, { instanceId: instance, model: "opus" })).toBe(
+      "Claude Opus · Work",
+    );
+    expect(modelLabel(accounts, { instanceId: instance, model: "haiku" })).toBe("haiku · Work");
+  });
+});
+
+describe("scoreboard", () => {
+  it("ranks each task type by kept rate, then runs, with undecided models last", () => {
+    const groups = scoreboard([
+      score("scripts", "undecided", 0, 0, 9),
+      score("scripts", "half", 1, 2, 2),
+      score("scripts", "all-few", 1, 1, 1),
+      score("scripts", "all-many", 3, 3, 4),
+      score("emails", "solo", 0, 1, 1),
+    ]);
+    expect(groups.map((group) => group.taskType)).toEqual(["emails", "scripts"]);
+    expect(groups[1]!.rows.map((row) => row.model.model)).toEqual([
+      "all-many",
+      "all-few",
+      "half",
+      "undecided",
+    ]);
+  });
+
+  it("summarizes a row", () => {
+    expect(scoreSummary({ ...score("t", "m", 3, 4, 5), avgDurationMs: 252_000 })).toBe(
+      "kept 3 of 4 · 5 runs · avg 4m 12s",
+    );
+    expect(formatDuration(3_900_000)).toBe("1h 5m");
+  });
+});
+
+describe("editing choices", () => {
+  it("moves items within bounds", () => {
+    expect(moveItem(["a", "b", "c"], 2, -1)).toEqual(["a", "c", "b"]);
+    expect(moveItem(["a", "b", "c"], 0, -1)).toEqual(["a", "b", "c"]);
+  });
+
+  it("toggles models up to the limit", () => {
+    const opus = { instanceId: instance, model: "opus" };
+    const haiku = { instanceId: instance, model: "haiku" };
+    expect(toggleChoice([opus], haiku, 2)).toEqual([opus, haiku]);
+    expect(toggleChoice([opus, haiku], opus, 2)).toEqual([haiku]);
+    expect(toggleChoice([opus], haiku, 1)).toEqual([opus]);
+  });
+});

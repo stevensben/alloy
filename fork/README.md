@@ -30,6 +30,8 @@ Current seams:
   project menus to the iPhone header.
 - `features/home/HomeScreen.tsx` hides the filter chip row on iPhone unless a
   filter is active.
+- `Stack.tsx` spreads `ALLOY_SCREENS` (goal, company, comps, lessons and their
+  sheets) into the root stack.
 
 ## App identity
 
