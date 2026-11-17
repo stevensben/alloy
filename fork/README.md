@@ -1,6 +1,6 @@
-# Fork notes
+# Alloy
 
-This fork adds an Agents view to T3 Code and otherwise tracks
+Alloy is a fork of T3 Code that adds an Agents view. It otherwise tracks
 [pingdotgg/t3code](https://github.com/pingdotgg/t3code).
 
 ## Rule
