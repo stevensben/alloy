@@ -41,3 +41,13 @@ it("detaches from T3's Expo project and link domains", async () => {
   expect(config.android?.intentFilters).toBeUndefined();
   expect(JSON.stringify(config)).not.toContain("com.t3tools");
 });
+
+it("uses Alloy's icons everywhere T3's would appear", async () => {
+  const config = await loadConfig("development");
+  expect(config.icon).toBe("../../fork/assets/alloy-1024.png");
+  expect(config.ios?.icon).toBe("../../fork/assets/alloy-1024.png");
+  expect(config.android?.adaptiveIcon?.foregroundImage).toBe(
+    "../../fork/assets/android-foreground.png",
+  );
+  expect(JSON.stringify(config)).not.toMatch(/blueprint|nightly|black-ios|app-icon\.icon/);
+});

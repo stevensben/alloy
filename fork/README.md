@@ -46,6 +46,13 @@ It signs with the Mastery Beverage Inc team (`8BPBB42ZJH`) and drops what
 belongs to T3's accounts: its Expo project and over-the-air updates, and the
 t3.codes link domains. `ALLOY_IDENTITY=0` builds with T3's identity instead.
 
+### Icon
+
+The icon comes from `fork/assets/source.jpg`, a placeholder logo on black. To
+change it, save the new image there (square-ish, on a black background) and run
+`fork/assets/build-icons.sh`. It builds the iOS icon, the Android adaptive,
+themed and splash icons, and the splash screen image. Rebuild the app to see it.
+
 ## Getting Theo's updates
 
 Run `fork/sync.sh`. It fetches `upstream`, merges `upstream/main` into `main`,
