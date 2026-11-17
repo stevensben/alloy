@@ -14,14 +14,12 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   accountsOverview,
   accountUsageSummary,
-  agentSubtitle,
   chooseAlloyEnvironment,
   currentMilestone,
   formatDuration,
   formatResetsIn,
   goalMilestones,
   goalStatusLabel,
-  groupGoalsByCompany,
   modelLabel,
   moveItem,
   roadmapProgress,
@@ -121,30 +119,6 @@ describe("chooseAlloyEnvironment", () => {
 });
 
 describe("goals", () => {
-  it("groups by company name and orders running before paused, draft and done", () => {
-    const groups = groupGoalsByCompany({
-      companies: [
-        { id: AlloyCompanyId.make("z"), name: "Zeta", modelRanking: [], createdAt: "" },
-        { id: AlloyCompanyId.make("a"), name: "Acme", modelRanking: [], createdAt: "" },
-        { id: AlloyCompanyId.make("e"), name: "Empty", modelRanking: [], createdAt: "" },
-      ],
-      goals: [
-        goal("done", "a", "done", "2026-11-17T11:00:00Z"),
-        goal("old-running", "a", "running", "2026-11-16T00:00:00Z"),
-        goal("new-running", "a", "running", "2026-11-17T00:00:00Z"),
-        goal("paused", "a", "paused", "2026-11-17T10:00:00Z"),
-        goal("zeta", "z", "draft", "2026-11-17T10:00:00Z"),
-      ],
-    });
-    expect(groups.map((group) => group.company.name)).toEqual(["Acme", "Zeta"]);
-    expect(groups[0]!.goals.map((entry) => entry.id)).toEqual([
-      "new-running",
-      "old-running",
-      "paused",
-      "done",
-    ]);
-  });
-
   it("orders the roadmap and finds progress and the current milestone", () => {
     const roadmap = goalMilestones(
       [
@@ -178,22 +152,6 @@ describe("agents", () => {
         },
       }),
     ).toBe("Planning with you");
-  });
-
-  it("subtitles a row with status, current milestone, progress and model", () => {
-    const running = {
-      ...goal("goal", "co", "running", "2026-11-17T00:00:00.000Z"),
-      orchestrator: {
-        threadId: "thread" as never,
-        model: { instanceId: instance, model: "opus" },
-        routingNote: "",
-        startedAt: "2026-11-17T00:00:00.000Z",
-      },
-    };
-    expect(
-      agentSubtitle(running, [milestone(0, "done"), milestone(1, "current")], [account([])]),
-    ).toBe("Running · Now: Milestone 1 · 1/2 milestones\nClaude Opus · Work");
-    expect(agentSubtitle(goal("goal", "co", "draft", running.createdAt), [], [])).toBe("Draft");
   });
 });
 

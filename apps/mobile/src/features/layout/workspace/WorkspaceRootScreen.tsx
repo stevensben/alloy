@@ -44,10 +44,9 @@ import {
   useSystemWorkspaceTabBar,
 } from "./useSystemWorkspaceTabBar";
 import { openSettings } from "../../settings/settings-navigation";
-import { useAtomValue } from "@effect/atom-react";
-import { AgentsScreen } from "../../../fork/agents/AgentsScreen";
+import { AlloyShell } from "../../../fork/agents/AlloyShell";
+import { useAlloyShellActive } from "../../../fork/agents/workspace-mode";
 import { WorkspaceModePicker } from "../../../fork/agents/WorkspaceModePicker";
-import { workspaceModeAtom } from "../../../fork/agents/workspace-mode";
 
 const TAB_TITLES = WORKSPACE_TAB_LABELS;
 
@@ -113,7 +112,6 @@ function WorkspaceRootContent() {
   // Settings is a workspace tab too; its list takes the place of the selected tab's.
   const settingsOpen = workspace.settingsOpen;
   const headerOnly = use(NativeWorkspaceTabActivityContext)?.headerOnly === true;
-  const workspaceMode = useAtomValue(workspaceModeAtom);
   const renderHeaderTitle = () => (
     <WorkspaceRootTitle
       columnWidth={width}
@@ -179,11 +177,7 @@ function WorkspaceRootContent() {
           ) : enabled.length === 0 ? (
             <WorkspaceNoTabs />
           ) : state.selectedTab === "threads" ? (
-            workspaceMode === "agents" ? (
-              <AgentsScreen />
-            ) : (
-              <HomeRouteScreen />
-            )
+            <HomeRouteScreen />
           ) : state.selectedTab === "pullRequests" ? (
             <PullRequestsScreen />
           ) : state.selectedTab === "issues" ? (
@@ -208,6 +202,8 @@ function WorkspaceRootContent() {
 
 export function WorkspaceRootScreen() {
   const workspace = useWorkspaceTabs();
+  const alloyShell = useAlloyShellActive();
+  if (alloyShell) return <AlloyShell />;
   return workspace ? (
     <WorkspaceRootContent />
   ) : (

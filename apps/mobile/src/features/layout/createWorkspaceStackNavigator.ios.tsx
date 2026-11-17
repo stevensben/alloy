@@ -57,6 +57,7 @@ import { useDeviceType, useNativeLayoutMetrics } from "../../native/native-layou
 
 import { useAdaptiveWorkspaceLayout, useWorkspacePaneState } from "./AdaptiveWorkspaceLayout";
 import { WorkspacePaneDivider } from "./workspace-pane-divider";
+import { useAlloyShellActive } from "../../fork/agents/workspace-mode";
 import { WorkspaceEmptyDetail } from "./WorkspaceEmptyDetail";
 import { NativeColumnContent as ColumnContent } from "../../native/NativeColumnContent.ios";
 import {
@@ -530,6 +531,7 @@ function WorkspaceStackView(props: ViewProps & { readonly nativeColumns: boolean
   const { layout } = useAdaptiveWorkspaceLayout();
   const deviceType = useDeviceType();
   const workspace = useWorkspaceTabs()!;
+  const alloyShell = useAlloyShellActive();
   // Native dismiss commits the route pop after the transition. Restore the dock
   // when the primary screen starts appearing, including interactive back gestures.
   const [primaryVisible, setPrimaryVisible] = useState(false);
@@ -563,10 +565,11 @@ function WorkspaceStackView(props: ViewProps & { readonly nativeColumns: boolean
       <WorkspaceNativeTabs
         tabsInSidebarColumn={props.nativeColumns && !workspacePage && deviceType === "pad"}
         hidden={
-          projection.detail.length > 0 &&
-          !primaryVisible &&
-          !layout.usesSplitView &&
-          (metrics?.verticalBarEdge ?? "none") === "none"
+          alloyShell ||
+          (projection.detail.length > 0 &&
+            !primaryVisible &&
+            !layout.usesSplitView &&
+            (metrics?.verticalBarEdge ?? "none") === "none")
         }
       >
         {(slotWorkspace, headerOnly) => {

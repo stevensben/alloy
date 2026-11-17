@@ -2,7 +2,6 @@ import type {
   AlloyAccount,
   AlloyActivity,
   AlloyComp,
-  AlloyCompany,
   AlloyGoal,
   AlloyGoalId,
   AlloyGoalStatus,
@@ -58,38 +57,8 @@ export const PROPOSAL_KIND_LABEL: Record<AlloyProposal["body"]["_tag"], string> 
   vision: "Vision change",
 };
 
-const GOAL_STATUS_ORDER: Record<AlloyGoalStatus, number> = {
-  running: 0,
-  paused: 1,
-  draft: 2,
-  done: 3,
-};
-
 const byNewest = <T extends { readonly createdAt: string }>(left: T, right: T) =>
   right.createdAt.localeCompare(left.createdAt);
-
-interface CompanyGoals {
-  readonly company: AlloyCompany;
-  readonly goals: ReadonlyArray<AlloyGoal>;
-}
-
-export function groupGoalsByCompany(
-  snapshot: Pick<AlloySnapshot, "companies" | "goals">,
-): ReadonlyArray<CompanyGoals> {
-  return snapshot.companies
-    .map((company) => ({
-      company,
-      goals: snapshot.goals
-        .filter((goal) => goal.companyId === company.id)
-        .sort(
-          (left, right) =>
-            GOAL_STATUS_ORDER[left.status] - GOAL_STATUS_ORDER[right.status] ||
-            right.updatedAt.localeCompare(left.updatedAt),
-        ),
-    }))
-    .filter((group) => group.goals.length > 0)
-    .sort((left, right) => left.company.name.localeCompare(right.company.name));
-}
 
 export function goalMilestones(
   milestones: ReadonlyArray<AlloyMilestone>,
@@ -113,25 +82,6 @@ export function currentMilestone(milestones: ReadonlyArray<AlloyMilestone>): All
     milestones.find((milestone) => milestone.status !== "done") ??
     null
   );
-}
-
-/** An agent row's subtitle: status, current milestone and progress, then the model. */
-export function agentSubtitle(
-  goal: AlloyGoal,
-  milestones: ReadonlyArray<AlloyMilestone>,
-  accounts: ReadonlyArray<AlloyAccount>,
-): string {
-  const roadmap = goalMilestones(milestones, goal.id);
-  const current = currentMilestone(roadmap);
-  const progress = roadmapProgress(roadmap);
-  const status = [
-    goalStatusLabel(goal),
-    current ? `Now: ${current.title}` : null,
-    progress.total > 0 ? `${progress.done}/${progress.total} milestones` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  return goal.orchestrator ? `${status}\n${modelLabel(accounts, goal.orchestrator.model)}` : status;
 }
 
 /** Roughly whether text runs past `lines` lines on a phone, without measuring layout. */
@@ -202,10 +152,14 @@ export function modelOptions(accounts: ReadonlyArray<AlloyAccount>): ReadonlyArr
     );
 }
 
+export function modelName(accounts: ReadonlyArray<AlloyAccount>, choice: AlloyModelChoice) {
+  const account = accounts.find((candidate) => candidate.instanceId === choice.instanceId);
+  return account?.models.find((model) => model.slug === choice.model)?.name ?? choice.model;
+}
+
 export function modelLabel(accounts: ReadonlyArray<AlloyAccount>, choice: AlloyModelChoice) {
   const account = accounts.find((candidate) => candidate.instanceId === choice.instanceId);
-  const name = account?.models.find((model) => model.slug === choice.model)?.name ?? choice.model;
-  return `${name} · ${account?.label ?? choice.instanceId}`;
+  return `${modelName(accounts, choice)} · ${account?.label ?? choice.instanceId}`;
 }
 
 export function moveItem<T>(items: ReadonlyArray<T>, index: number, delta: number): T[] {

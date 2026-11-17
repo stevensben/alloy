@@ -6,7 +6,8 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { WS_METHODS, type EnvironmentId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { ThreadId, WS_METHODS, type EnvironmentId } from "@t3tools/contracts";
 import {
   AlloyCompanyId,
   type AlloyCommand,
@@ -23,8 +24,10 @@ import { connectionAtomRuntime } from "../../connection/runtime";
 import { homeListFilterEnvironments } from "../../features/home/home-list-filter-menu";
 import { useHomeListOptions } from "../../features/home/home-list-options";
 import { useEnvironmentQuery } from "../../state/query";
+import { environmentThreadDetails } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useWorkspaceEnvironments, workspaceConnections } from "../../state/workspace";
+import { threadPreview, type ThreadPreview } from "./alloy-inbox";
 import { chooseAlloyEnvironment, type AlloyProbe } from "./alloy-model";
 
 const POLL_INTERVAL_MS = 5_000;
@@ -119,6 +122,30 @@ export function useAlloySnapshotFetch(environmentId: EnvironmentId) {
     const result = await fetch({ environmentId, input: {} });
     return result._tag === "Success" ? result.value : null;
   };
+}
+
+const NO_PREVIEW = Atom.make<ThreadPreview | null>(null);
+
+// Keyed `environmentId\u0000threadId`. Keeps its value until the preview itself changes, so a
+// row does not re-render on every streamed token.
+const threadPreviewAtom = Atom.family((key: string) => {
+  const [environmentId, threadId] = key.split("\u0000") as [EnvironmentId, string];
+  const ref = scopeThreadRef(environmentId, ThreadId.make(threadId));
+  let previous: ThreadPreview | null = null;
+  return Atom.make((get) => {
+    const next = threadPreview(
+      get(environmentThreadDetails.threadAtom(ref))?.projection.messages ?? [],
+    );
+    if (next?.text !== previous?.text || next?.at !== previous?.at) previous = next;
+    return previous;
+  }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`alloy:thread-preview:${key}`));
+});
+
+/** The newest message in a thread, from the thread data T3 already syncs. */
+export function useThreadPreview(environmentId: EnvironmentId, threadId: ThreadId | null) {
+  return useAtomValue(
+    threadId === null ? NO_PREVIEW : threadPreviewAtom(`${environmentId}\u0000${threadId}`),
+  );
 }
 
 /** Prompts for a company name and creates it. */

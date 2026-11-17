@@ -1,6 +1,6 @@
 import type { MenuAction } from "@react-native-menu/menu";
-import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
+import type { EnvironmentId } from "@t3tools/contracts";
 import type {
   AlloyCommand,
   AlloyGoal,
@@ -27,6 +27,7 @@ import { Progress } from "../../components/ui/Progress";
 import { useNowMinuteMs } from "../../lib/clock";
 import { relativeTime } from "../../lib/time";
 import { AlloyPage, Muted, NotFound, ProgressLine, WithSnapshot } from "./AlloyLayout";
+import { ProposalContent } from "./AlloyProposalContent";
 import {
   goalActivity,
   goalMilestones,
@@ -39,6 +40,7 @@ import {
   PROPOSAL_KIND_LABEL,
   roadmapProgress,
 } from "./alloy-model";
+import { useOpenAgent, useOpenInCode } from "./alloy-navigation";
 import { useAlloyCommand, useAlloySnapshot } from "./alloy-state";
 
 type GoalParams = { readonly environmentId: EnvironmentId; readonly goalId: AlloyGoalId };
@@ -87,7 +89,7 @@ function GoalBody(props: {
   return (
     <>
       {goal.status === "draft" && goal.orchestrator ? (
-        <Planning environmentId={environmentId} threadId={goal.orchestrator.threadId} />
+        <Planning environmentId={environmentId} goal={goal} />
       ) : null}
       <GoalHeader
         environmentId={environmentId}
@@ -141,14 +143,8 @@ function GoalBody(props: {
   );
 }
 
-function useOpenThread(environmentId: EnvironmentId) {
-  const navigation = useNavigation();
-  return (threadId: ThreadId) =>
-    navigation.dispatch(StackActions.push("Thread", { environmentId, threadId }));
-}
-
-function Planning(props: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId }) {
-  const openThread = useOpenThread(props.environmentId);
+function Planning(props: { readonly environmentId: EnvironmentId; readonly goal: AlloyGoal }) {
+  const openAgent = useOpenAgent(props.environmentId);
   return (
     <ListSection title="Planning with you">
       <View className="gap-3 p-4">
@@ -162,7 +158,7 @@ function Planning(props: { readonly environmentId: EnvironmentId; readonly threa
             icon="bubble.left.and.bubble.right"
             tone="primary"
             size="compact"
-            onPress={() => openThread(props.threadId)}
+            onPress={() => openAgent(props.goal)}
           />
         </View>
       </View>
@@ -318,63 +314,18 @@ function ProposalCard(props: {
 }) {
   const { proposal } = props;
   const nowMs = useNowMinuteMs();
-  const decide = (decision: "approved" | "rejected" | "noted", note: string | null = null) =>
-    props.onCommand({ _tag: "decideProposal", proposalId: proposal.id, decision, note });
-  const reject = () =>
-    Dialog.prompt({
-      title: "Reject proposal",
-      message: "Optionally tell the agent why. The reason becomes a lesson.",
-      placeholder: "Reason",
-      initialValue: "",
-      confirmText: "Reject",
-      onConfirm: (reason) => decide("rejected", reason.trim() || null),
-    });
-  const roadmap = proposal.body._tag === "roadmap" ? proposal.body.milestones : null;
-  const vision = proposal.body._tag === "vision" ? proposal.body.vision : null;
   return (
     <ListSection
       title={`Needs you · ${PROPOSAL_KIND_LABEL[proposal.body._tag].toLowerCase()}`}
       footer={`${proposal.author} · ${relativeTime(proposal.createdAt, nowMs)} ago`}
     >
-      <View className="gap-3 p-4">
-        <Text textRole="body" className="font-t3-bold text-foreground">
-          {proposal.title}
-        </Text>
-        {proposal.rationale ? <Muted>{proposal.rationale}</Muted> : null}
-        {vision === null ? null : (
-          <Text textRole="body" className="text-foreground">
-            {vision}
-          </Text>
-        )}
-        {roadmap ? (
-          <View className="gap-2">
-            {roadmap.map((item, index) => (
-              <View key={`${item.title}\u0000${item.doneWhen}`} className="flex-row gap-2">
-                <Text textRole="footnote" className="w-5 text-right text-foreground-muted">
-                  {`${index + 1}.`}
-                </Text>
-                <View className="min-w-0 flex-1">
-                  <Text textRole="footnote" className="text-foreground">
-                    {item.title}
-                  </Text>
-                  {item.doneWhen ? <Muted>{item.doneWhen}</Muted> : null}
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : null}
-        <View className="flex-row flex-wrap gap-2">
-          <Button
-            label="Approve"
-            tone="primary"
-            size="compact"
-            onPress={() => decide("approved")}
-          />
-          {proposal.body._tag === "idea" ? (
-            <Button label="Noted" tone="secondary" size="compact" onPress={() => decide("noted")} />
-          ) : null}
-          <Button label="Reject" tone="danger" size="compact" onPress={reject} />
-        </View>
+      <View className="p-4">
+        <ProposalContent
+          proposal={proposal}
+          onDecide={(decision, note) =>
+            props.onCommand({ _tag: "decideProposal", proposalId: proposal.id, decision, note })
+          }
+        />
       </View>
     </ListSection>
   );
@@ -387,7 +338,8 @@ function GoalActions(props: {
   readonly onCommand: (command: AlloyCommand) => void;
 }) {
   const { goal } = props;
-  const openThread = useOpenThread(props.environmentId);
+  const openAgent = useOpenAgent(props.environmentId);
+  const openInCode = useOpenInCode(props.environmentId);
   const options = modelOptions(props.snapshot.accounts);
   const start = (model: AlloyModelChoice | null) =>
     props.onCommand({ _tag: "startGoal", goalId: goal.id, model });
@@ -431,30 +383,15 @@ function GoalActions(props: {
       ) : null}
       {orchestrator ? (
         <>
-          <ListActionRow
-            icon="text.bubble"
-            label="Message orchestrator"
-            onPress={() =>
-              Dialog.prompt({
-                title: "Message orchestrator",
-                initialValue: "",
-                confirmText: "Send",
-                onConfirm: (text) => {
-                  if (text.trim()) {
-                    props.onCommand({
-                      _tag: "messageOrchestrator",
-                      goalId: goal.id,
-                      text: text.trim(),
-                    });
-                  }
-                },
-              })
-            }
-          />
           <ListRow
             icon="bubble.left.and.bubble.right"
-            label="Open orchestrator thread"
-            onPress={() => openThread(orchestrator.threadId)}
+            label="Open conversation"
+            onPress={() => openAgent(goal)}
+          />
+          <ListRow
+            icon="chevron.left.forwardslash.chevron.right"
+            label="Open in Code"
+            onPress={() => openInCode(orchestrator.threadId)}
           />
         </>
       ) : null}

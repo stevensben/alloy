@@ -66,7 +66,7 @@ function NewAgent(props: { readonly environmentId: EnvironmentId }) {
     const threadId = snapshot?.goals.find((goal) => goal.id === goalId)?.orchestrator?.threadId;
     navigation.dispatch(
       threadId
-        ? StackActions.replace("Thread", { environmentId, threadId })
+        ? StackActions.replace("AlloyChat", { environmentId, threadId, goalId })
         : StackActions.replace("AlloyGoal", { environmentId, goalId }),
     );
   };

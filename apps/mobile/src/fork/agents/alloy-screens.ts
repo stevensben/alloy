@@ -2,6 +2,7 @@ import { createNativeStackScreen } from "@react-navigation/native-stack";
 
 import { pageRoute, sheetRoute } from "../../features/layout/route-options";
 import { AlloyAccountsScreen } from "./AlloyAccountsScreen";
+import { AlloyChatScreen } from "./AlloyChatScreen";
 import { AlloyCompanyScreen } from "./AlloyCompanyScreen";
 import { AlloyCompScreen } from "./AlloyCompScreen";
 import { AlloyCompsScreen } from "./AlloyCompsScreen";
@@ -17,6 +18,7 @@ const SETTINGS_PAGE = pageRoute({ itemStyle: "standard" });
 
 // Pages under Settings › Alloy are named Settings* so the Settings tab stays open beneath them.
 export const ALLOY_SCREENS = {
+  AlloyChat: createNativeStackScreen({ screen: AlloyChatScreen, options: pageRoute() }),
   AlloyGoal: createNativeStackScreen({ screen: AlloyGoalScreen, options: pageRoute() }),
   AlloyNewAgent: createNativeStackScreen({ screen: AlloyNewAgentSheet, options: FORM_SHEET }),
   AlloyNewGoal: createNativeStackScreen({ screen: AlloyNewGoalSheet, options: FORM_SHEET }),
