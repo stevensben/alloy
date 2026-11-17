@@ -23,12 +23,28 @@ into fork code. Small seams keep upstream merges clean.
 
 Current seams:
 
+- `apps/mobile/app.config.ts` builds the app as Alloy (see below).
 - `features/layout/workspace/WorkspaceRootScreen.tsx` shows the Agents/Code
   picker as the Chats title and swaps in `AgentsScreen`.
 - `features/layout/workspace/WorkspaceToolbar.tsx` adds the environment and
   project menus to the iPhone header.
 - `features/home/HomeScreen.tsx` hides the filter chip row on iPhone unless a
   filter is active.
+
+## App identity
+
+`src/fork/config/alloy-identity.ts` sets the iOS and Android app to Alloy, so it
+installs beside T3 instead of replacing it:
+
+| Variant     | Name          | Bundle ID                          |
+| ----------- | ------------- | ---------------------------------- |
+| development | Alloy Dev     | `com.masteryprotein.alloy.dev`     |
+| preview     | Alloy Preview | `com.masteryprotein.alloy.preview` |
+| production  | Alloy         | `com.masteryprotein.alloy`         |
+
+It signs with the Mastery Beverage Inc team (`8BPBB42ZJH`) and drops what
+belongs to T3's accounts: its Expo project and over-the-air updates, and the
+t3.codes link domains. `ALLOY_IDENTITY=0` builds with T3's identity instead.
 
 ## Getting Theo's updates
 
