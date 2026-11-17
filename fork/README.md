@@ -55,6 +55,19 @@ change it, save the new image there (square-ish, on a black background) and run
 `fork/assets/build-icons.sh`. It builds the iOS icon, the Android adaptive,
 themed and splash icons, and the splash screen image. Rebuild the app to see it.
 
+## Running Alloy
+
+Alloy needs its own server, separate from the T3 app:
+
+```sh
+fork/serve.sh
+```
+
+It keeps its data in `~/.alloy` and listens on port 3873, so it never touches
+T3's data in `~/.t3` or its port 3773. On start it prints a pairing link. Open
+it in the Alloy app (Settings › Environments) to connect your phone. Restart
+the server after pulling new Alloy code.
+
 ## Getting Theo's updates
 
 Run `fork/sync.sh`. It fetches `upstream`, merges `upstream/main` into `main`,
