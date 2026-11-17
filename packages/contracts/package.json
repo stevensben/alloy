@@ -15,6 +15,10 @@
       "types": "./src/settings.ts",
       "import": "./src/settings.ts"
     },
+    "./alloy": {
+      "types": "./src/fork/alloy.ts",
+      "import": "./src/fork/alloy.ts"
+    },
     "./relay": {
       "types": "./src/relay.ts",
       "import": "./src/relay.ts"
