@@ -216,6 +216,20 @@ export function accountUsageSummary(account: AlloyAccount, nowMs: number): strin
   return resets === null ? used : `${used} · ${resets}`;
 }
 
+/** One line for the Agents screen: how many accounts are ready and the busiest one's usage. */
+export function accountsOverview(accounts: ReadonlyArray<AlloyAccount>, nowMs: number): string {
+  const ready = accounts.filter((account) => account.available);
+  if (ready.length === 0) return "None set up yet";
+  const busiest = ready
+    .map((account) => ({ account, window: highestUsage(account) }))
+    .filter((entry) => entry.window !== null)
+    .sort((left, right) => (right.window?.usedPercent ?? 0) - (left.window?.usedPercent ?? 0))[0];
+  const count = `${ready.length} ready`;
+  return busiest === undefined
+    ? count
+    : `${count} · ${busiest.account.label} ${accountUsageSummary(busiest.account, nowMs)}`;
+}
+
 export function formatDuration(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
   if (seconds < 60) return `${seconds}s`;

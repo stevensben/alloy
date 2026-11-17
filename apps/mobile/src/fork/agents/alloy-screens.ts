@@ -1,6 +1,7 @@
 import { createNativeStackScreen } from "@react-navigation/native-stack";
 
 import { pageRoute, sheetRoute } from "../../features/layout/route-options";
+import { AlloyAccountsScreen } from "./AlloyAccountsScreen";
 import { AlloyCompanyScreen } from "./AlloyCompanyScreen";
 import { AlloyCompScreen } from "./AlloyCompScreen";
 import { AlloyCompsScreen } from "./AlloyCompsScreen";
@@ -19,5 +20,6 @@ export const ALLOY_SCREENS = {
   AlloyComps: createNativeStackScreen({ screen: AlloyCompsScreen, options: pageRoute() }),
   AlloyNewComp: createNativeStackScreen({ screen: AlloyNewCompSheet, options: FORM_SHEET }),
   AlloyComp: createNativeStackScreen({ screen: AlloyCompScreen, options: pageRoute() }),
+  AlloyAccounts: createNativeStackScreen({ screen: AlloyAccountsScreen, options: pageRoute() }),
   AlloyLessons: createNativeStackScreen({ screen: AlloyLessonsScreen, options: pageRoute() }),
 };

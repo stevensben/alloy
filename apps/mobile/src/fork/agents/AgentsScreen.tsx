@@ -8,7 +8,6 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ListRow } from "../../components/ui/ListRow";
-import { ListRowLayout } from "../../components/ui/ListRowLayout";
 import { ListSection } from "../../components/ui/ListSection";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
@@ -21,7 +20,7 @@ import { useNowMinuteMs } from "../../lib/clock";
 import { useWorkspaceEnvironments } from "../../state/workspace";
 import { ProgressLine, WithSnapshot } from "./AlloyLayout";
 import {
-  accountUsageSummary,
+  accountsOverview,
   currentMilestone,
   GOAL_STATUS_LABEL,
   goalMilestones,
@@ -177,22 +176,13 @@ function AgentsOverview(props: {
           description={`${activeLessons} active`}
           onPress={() => navigation.navigate("AlloyLessons", { environmentId })}
         />
+        <ListRow
+          icon="person.crop.circle"
+          label="Accounts"
+          description={accountsOverview(snapshot.accounts, nowMs)}
+          onPress={() => navigation.navigate("AlloyAccounts", { environmentId })}
+        />
       </ListSection>
-
-      {snapshot.accounts.length > 0 ? (
-        <ListSection title="Accounts">
-          {snapshot.accounts.map((account) => (
-            <ListRowLayout
-              key={account.instanceId}
-              icon="person.crop.circle"
-              label={account.label}
-              description={accountUsageSummary(account, nowMs)}
-              detail={account.driver}
-              disabled={!account.available}
-            />
-          ))}
-        </ListSection>
-      ) : null}
     </>
   );
 }

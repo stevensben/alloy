@@ -12,6 +12,7 @@ import { ProviderInstanceId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  accountsOverview,
   accountUsageSummary,
   chooseAlloyEnvironment,
   currentMilestone,
@@ -230,5 +231,33 @@ describe("editing choices", () => {
     expect(toggleChoice([opus], haiku, 2)).toEqual([opus, haiku]);
     expect(toggleChoice([opus, haiku], opus, 2)).toEqual([haiku]);
     expect(toggleChoice([opus], haiku, 1)).toEqual([opus]);
+  });
+});
+
+describe("accountsOverview", () => {
+  const now = Date.parse("2026-11-17T12:00:00Z");
+  const account = (label: string, available: boolean, usedPercent: number | null) => ({
+    instanceId: ProviderInstanceId.make(label.toLowerCase()),
+    label,
+    driver: label.toLowerCase(),
+    available,
+    models: [],
+    usage:
+      usedPercent === null
+        ? []
+        : [{ label: "Weekly", usedPercent, resetsAt: "2026-11-20T12:00:00Z" }],
+  });
+
+  it("says when nothing is set up", () => {
+    expect(accountsOverview([account("Codex", false, null)], now)).toBe("None set up yet");
+  });
+
+  it("counts ready accounts and names the busiest", () => {
+    expect(
+      accountsOverview(
+        [account("Codex", false, null), account("Claude", true, 42), account("Work", true, 10)],
+        now,
+      ),
+    ).toBe("2 ready · Claude 42% of Weekly · resets in 3d");
   });
 });
