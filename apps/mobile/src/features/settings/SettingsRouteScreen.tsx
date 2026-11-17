@@ -35,6 +35,7 @@ import { filterSettingsSections } from "./settings-search";
 import { usePaneRole } from "../../components/ui/Pane";
 import { useGT } from "gt-react-native";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { useAlloySettingsRow } from "../../fork/agents/alloy-settings-row";
 
 export function SettingsRouteScreen() {
   const list = useSettingsListPlacement();
@@ -242,6 +243,7 @@ function useSettingsIndexSections(): SettingsListSection[] {
   const gt = useGT();
   const { selectedTargets, projectGroups, selectedProjectKey } = useSettingsEnvironmentFilter();
   const noServerTargets = selectedTargets.length === 0;
+  const alloyRow = useAlloySettingsRow();
   const selectedProject = projectGroups.find((group) => group.key === selectedProjectKey);
   const scopedProjectMembers =
     selectedProject?.members
@@ -282,6 +284,7 @@ function useSettingsIndexSections(): SettingsListSection[] {
     {
       title: gt("Agents"),
       rows: [
+        alloyRow,
         serverPage("SettingsProviderAccounts", "person.crop.circle", gt("Providers")),
         serverPage("SettingsThreads", "text.bubble", gt("Threads")),
         page("SettingsScheduledTasks", "clock", gt("Scheduled tasks")),

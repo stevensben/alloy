@@ -79,7 +79,7 @@ function CompsBody(props: {
             description={`${comp.taskType} · ${compStatusSummary(comp)}`}
             detail={relativeTime(comp.createdAt, nowMs)}
             onPress={() =>
-              navigation.navigate("AlloyComp", {
+              navigation.navigate("SettingsAlloyComp", {
                 environmentId: props.environmentId,
                 compId: comp.id,
               })

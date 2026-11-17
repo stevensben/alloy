@@ -84,7 +84,10 @@ export function AlloyNewCompSheet({
     setBusy(false);
     if (result?.id) {
       navigation.dispatch(
-        StackActions.replace("AlloyComp", { environmentId, compId: AlloyCompId.make(result.id) }),
+        StackActions.replace("SettingsAlloyComp", {
+          environmentId,
+          compId: AlloyCompId.make(result.id),
+        }),
       );
     }
   };

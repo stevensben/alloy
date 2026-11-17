@@ -60,6 +60,39 @@ const ProposeRoadmapTool = Tool.make("alloy_propose_roadmap", {
   .annotate(Tool.Destructive, false)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
+const DefineGoalTool = Tool.make("alloy_define_goal", {
+  ...shared,
+  description:
+    "While your goal is still being planned with Ben, save its short title and the vision you agreed on. After planning, propose vision changes with `alloy_propose_vision` instead.",
+  parameters: Schema.Struct({
+    goalId,
+    title: Schema.String.annotate({ description: "A few words, shown in Ben's agent list." }),
+    vision: Schema.String.annotate({
+      description: "The outcome, why it matters and what done looks like as a check.",
+    }),
+  }),
+  success: Done,
+})
+  .annotate(Tool.Title, "Define the Alloy goal")
+  .annotate(Tool.Destructive, false)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
+
+const ProposeVisionTool = Tool.make("alloy_propose_vision", {
+  ...shared,
+  description:
+    "Propose a rewritten vision for Ben to approve. `vision` is the full new text and replaces the current vision on approval.",
+  parameters: Schema.Struct({
+    goalId,
+    title: Schema.String.annotate({ description: "What changes, in a few words." }),
+    rationale: Schema.String.annotate({ description: "Why the vision should change." }),
+    vision: Schema.String,
+  }),
+  success: Schema.Struct({ proposalId: AlloyProposalId, message: Schema.String }),
+})
+  .annotate(Tool.Title, "Propose an Alloy vision")
+  .annotate(Tool.Destructive, false)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
+
 const LogIdeaTool = Tool.make("alloy_log_idea", {
   ...shared,
   description:
@@ -108,7 +141,9 @@ const RecordLessonTool = Tool.make("alloy_record_lesson", {
 
 export const AlloyToolkit = Toolkit.make(
   GoalContextTool,
+  DefineGoalTool,
   ProposeRoadmapTool,
+  ProposeVisionTool,
   LogIdeaTool,
   ReportProgressTool,
   RecordLessonTool,

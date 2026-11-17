@@ -3,12 +3,14 @@ import type {
   AlloyComp,
   AlloyCompany,
   AlloyGoal,
+  AlloyGoalStatus,
   AlloyLesson,
   AlloyMilestone,
   AlloyMilestoneId,
   AlloyModelChoice,
   AlloyProgress,
   AlloyProposal,
+  AlloyProposalBody,
   AlloyRoadmapItem,
   AlloyScore,
   AlloyUsageWindow,
@@ -363,6 +365,7 @@ const RULES = [
   "You own delivery of this goal. Judge every worker result against the vision, not just its task.",
   "Delegate work to workers with `delegate_task`; use `orchestrator_capabilities` to pick models. Give each worker the vision, its milestone and that milestone's done check.",
   "You may not change the roadmap. Propose a full milestone list with `alloy_propose_roadmap` and wait for Ben's approval.",
+  "You may not change the vision either. Propose a rewrite with `alloy_propose_vision` and wait for Ben's approval.",
   "If the roadmap is empty, your first job is to draft one and propose it. Then wait for approval.",
   "Log anything that would improve the vision or the approach with `alloy_log_idea`. Never sit on an improvement.",
   "Report progress with `alloy_report_progress` whenever a count changes or a milestone finishes. Counts come from checks you ran, never estimates.",
@@ -371,6 +374,8 @@ const RULES = [
   "Stay quiet between state changes: no status chatter. Ask Ben only when you are blocked or the decision is his.",
   'The `alloy_*` tools are on the T3 Code MCP server. If they are not listed, find them with tool search ("alloy").',
 ];
+
+const rulesText = RULES.map((rule) => `- ${rule}`).join("\n");
 
 export const buildOrchestratorBrief = (input: OrchestratorBriefInput): string => {
   const { company, goal, milestones, lessons, recentDecisions } = input;
@@ -402,11 +407,65 @@ export const buildOrchestratorBrief = (input: OrchestratorBriefInput): string =>
           "## Awaiting Ben",
           pending.map((proposal) => `- ${proposal.body._tag} "${proposal.title}"`).join("\n"),
         ]),
+    ...(goal.status === "draft"
+      ? [
+          "## Planning",
+          "This goal is still being planned with Ben. Interview him one question at a time until the outcome is clear, save it with `alloy_define_goal`, then propose a first roadmap. Start no work until Ben approves the roadmap.",
+        ]
+      : []),
     "## How you work",
-    RULES.map((rule) => `- ${rule}`).join("\n"),
+    rulesText,
   ];
   return sections.join("\n\n");
 };
+
+const TITLE_MAX = 60;
+
+/** The first line of Ben's opening request, short enough for a list row. */
+export const titleFromBrief = (brief: string): string => {
+  const line = brief
+    .split("\n")
+    .map((candidate) => candidate.trim())
+    .find((candidate) => candidate !== "");
+  if (line === undefined) return "New agent";
+  return line.length <= TITLE_MAX ? line : `${line.slice(0, TITLE_MAX - 1).trimEnd()}…`;
+};
+
+export interface PlanningBriefInput {
+  readonly company: AlloyCompany;
+  readonly goal: AlloyGoal;
+  readonly brief: string;
+  readonly lessons: ReadonlyArray<AlloyLesson>;
+}
+
+/** The first message of a new agent: plan the goal with Ben before any work. */
+export const buildPlanningBrief = (input: PlanningBriefInput): string =>
+  [
+    `# New Alloy agent for ${input.company.name}`,
+    `You are a new Alloy agent for ${input.company.name}. Goal id: ${input.goal.id}. Ben's opening request:`,
+    input.brief,
+    "## Plan it with Ben first",
+    [
+      "1. Before any work, interview Ben one question at a time: the outcome he wants, why it matters, what done looks like as a check you can run, constraints and deadlines, and what to avoid. Push back on anything vague. Keep each question short.",
+      "2. When the picture is clear, write a concise vision and save it with a short title using `alloy_define_goal`.",
+      "3. Then propose a first roadmap with `alloy_propose_roadmap`. Give every milestone a `doneWhen` that a check can prove.",
+      "4. Wait for Ben's approval. Begin work only after he approves the roadmap.",
+    ].join("\n"),
+    "## Lessons",
+    input.lessons.length === 0
+      ? "None yet."
+      : input.lessons.map((lesson) => `- ${lesson.text} (${scopeLabel(lesson)})`).join("\n"),
+    "## How you work",
+    rulesText,
+  ].join("\n\n");
+
+/** Approving the first roadmap ends planning: a draft goal starts running. */
+export const goalStatusAfterDecision = (
+  status: AlloyGoalStatus,
+  decision: "approved" | "rejected" | "noted",
+  body: AlloyProposalBody,
+): AlloyGoalStatus =>
+  status === "draft" && decision === "approved" && body._tag === "roadmap" ? "running" : status;
 
 export const buildCompPrompt = (prompt: string): string =>
   [

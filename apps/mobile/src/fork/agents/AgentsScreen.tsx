@@ -1,45 +1,25 @@
 import { useNavigation } from "@react-navigation/native";
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { AlloyGoal, AlloySnapshot } from "@t3tools/contracts/alloy";
-import { Pressable, View } from "react-native";
 
-import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
-import { AppText as Text } from "../../components/ui/AppText";
-import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ListRow } from "../../components/ui/ListRow";
 import { ListSection } from "../../components/ui/ListSection";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
 import { groupedListInsets } from "../../components/ui/listMetrics";
-import { homeListFilterEnvironments } from "../../features/home/home-list-filter-menu";
-import { useHomeListOptions } from "../../features/home/home-list-options";
 import { useWorkspaceTabs } from "../../features/layout/workspace/WorkspaceTabsContext";
-import { openSettings } from "../../features/settings/settings-navigation";
-import { useNowMinuteMs } from "../../lib/clock";
-import { useWorkspaceEnvironments } from "../../state/workspace";
-import { ProgressLine, WithSnapshot } from "./AlloyLayout";
+import { AlloyEnvironmentGate, WithSnapshot } from "./AlloyLayout";
 import {
-  accountsOverview,
-  currentMilestone,
-  GOAL_STATUS_LABEL,
-  goalMilestones,
+  agentSubtitle,
   groupGoalsByCompany,
-  modelLabel,
   pendingProposals,
-  roadmapProgress,
-  scoreboardLeaders,
+  PROPOSAL_KIND_LABEL,
 } from "./alloy-model";
-import { useAlloyEnvironment, useAlloySnapshot } from "./alloy-state";
+import { useAlloySnapshot } from "./alloy-state";
 
 export function AgentsScreen() {
   const bottomClearance = useWorkspaceTabs()?.bottomClearance ?? 0;
-  const navigation = useNavigation();
-  const environments = homeListFilterEnvironments(useWorkspaceEnvironments());
-  const { options } = useHomeListOptions(
-    new Set(environments.map((environment) => environment.environmentId)),
-  );
-  const choice = useAlloyEnvironment(options.selectedEnvironmentId);
   return (
     <ScreenContent surface="screen">
       <ScreenScrollView
@@ -51,21 +31,9 @@ export function AgentsScreen() {
           paddingBottom: bottomClearance,
         }}
       >
-        {choice._tag === "found" ? (
-          <AgentsHome environmentId={choice.environmentId} />
-        ) : choice._tag === "probing" ? (
-          <View className="items-center py-10">
-            <AppActivityIndicator colorClassName="accent-icon" />
-          </View>
-        ) : (
-          <EmptyState
-            variant="plain"
-            title="Connect this app to your Alloy server"
-            detail="Goals, comps and lessons live on the Mac running Alloy. None of the environments this phone is connected to answers as Alloy, so add that one in Environments."
-            actionLabel="Open Environments"
-            onAction={() => openSettings(navigation, "SettingsEnvironments")}
-          />
-        )}
+        <AlloyEnvironmentGate>
+          {(environmentId) => <AgentsHome environmentId={environmentId} />}
+        </AlloyEnvironmentGate>
       </ScreenScrollView>
     </ScreenContent>
   );
@@ -75,41 +43,35 @@ function AgentsHome(props: { readonly environmentId: EnvironmentId }) {
   const query = useAlloySnapshot(props.environmentId);
   return (
     <WithSnapshot query={query}>
-      {(snapshot) => <AgentsOverview environmentId={props.environmentId} snapshot={snapshot} />}
+      {(snapshot) => <AgentsList environmentId={props.environmentId} snapshot={snapshot} />}
     </WithSnapshot>
   );
 }
 
-function AgentsOverview(props: {
+function AgentsList(props: {
   readonly environmentId: EnvironmentId;
   readonly snapshot: AlloySnapshot;
 }) {
   const { environmentId, snapshot } = props;
   const navigation = useNavigation();
-  const nowMs = useNowMinuteMs();
   const needsYou = pendingProposals(snapshot.proposals);
   const companies = groupGoalsByCompany(snapshot);
-  const leaders = scoreboardLeaders(snapshot.scores);
-  const activeLessons = snapshot.lessons.filter((lesson) => lesson.active).length;
-  const newGoal = () => navigation.navigate("AlloyNewGoal", { environmentId });
   const openGoal = (goal: AlloyGoal) =>
     navigation.navigate("AlloyGoal", { environmentId, goalId: goal.id });
 
+  if (companies.length === 0) {
+    return (
+      <EmptyState
+        title="No agents yet"
+        detail="An agent talks a goal through with you, proposes a roadmap, then works through it and checks with you before changing course."
+        actionLabel="New agent"
+        onAction={() => navigation.navigate("AlloyNewAgent")}
+      />
+    );
+  }
+
   return (
     <>
-      {companies.length === 0 ? (
-        <EmptyState
-          title="No goals yet"
-          detail="A goal is an outcome you hand to an orchestrator agent, which works through a roadmap of milestones and checks with you before changing it."
-          actionLabel="New goal"
-          onAction={newGoal}
-        />
-      ) : (
-        <View className="self-start">
-          <Button label="New goal" icon="plus" tone="primary" size="compact" onPress={newGoal} />
-        </View>
-      )}
-
       {needsYou.length > 0 ? (
         <ListSection title={`Needs you (${needsYou.length})`}>
           {needsYou.map((proposal) => {
@@ -119,9 +81,7 @@ function AgentsOverview(props: {
                 key={proposal.id}
                 icon="exclamationmark.triangle"
                 label={proposal.title}
-                description={`${goal?.title ?? "Goal"} · ${
-                  proposal.body._tag === "roadmap" ? "Roadmap change" : "Idea"
-                }`}
+                description={`${goal?.title ?? "Agent"} · ${PROPOSAL_KIND_LABEL[proposal.body._tag]}`}
                 onPress={() => goal && openGoal(goal)}
               />
             );
@@ -130,90 +90,17 @@ function AgentsOverview(props: {
       ) : null}
 
       {companies.map(({ company, goals }) => (
-        <ListSection
-          key={company.id}
-          title={company.name}
-          trailing={
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${company.name} models`}
-              className="px-2 active:opacity-60"
-              onPress={() =>
-                navigation.navigate("AlloyCompany", { environmentId, companyId: company.id })
-              }
-            >
-              <Text textRole="footnote" className="font-t3-medium text-primary-text">
-                Models
-              </Text>
-            </Pressable>
-          }
-        >
+        <ListSection key={company.id} title={companies.length > 1 ? company.name : undefined}>
           {goals.map((goal) => (
-            <GoalRow key={goal.id} goal={goal} snapshot={snapshot} onPress={() => openGoal(goal)} />
+            <ListRow
+              key={goal.id}
+              label={goal.title}
+              description={agentSubtitle(goal, snapshot.milestones, snapshot.accounts)}
+              onPress={() => openGoal(goal)}
+            />
           ))}
         </ListSection>
       ))}
-
-      <ListSection>
-        <ListRow
-          icon="chart.bar.xaxis"
-          label="Comps"
-          description={
-            leaders.length > 0
-              ? leaders
-                  .map(
-                    (leader) =>
-                      `${leader.taskType}: ${modelLabel(snapshot.accounts, leader.model)}`,
-                  )
-                  .join("\n")
-              : "Run one prompt on several models and keep the best"
-          }
-          onPress={() => navigation.navigate("AlloyComps", { environmentId })}
-        />
-        <ListRow
-          icon="brain"
-          label="Lessons"
-          description={`${activeLessons} active`}
-          onPress={() => navigation.navigate("AlloyLessons", { environmentId })}
-        />
-        <ListRow
-          icon="person.crop.circle"
-          label="Accounts"
-          description={accountsOverview(snapshot.accounts, nowMs)}
-          onPress={() => navigation.navigate("AlloyAccounts", { environmentId })}
-        />
-      </ListSection>
     </>
-  );
-}
-
-function GoalRow(props: {
-  readonly goal: AlloyGoal;
-  readonly snapshot: AlloySnapshot;
-  readonly onPress: () => void;
-}) {
-  const { goal, snapshot } = props;
-  const roadmap = goalMilestones(snapshot.milestones, goal.id);
-  const current = currentMilestone(roadmap);
-  const progress = roadmapProgress(roadmap);
-  return (
-    <ListRow
-      label={goal.title}
-      detail={GOAL_STATUS_LABEL[goal.status]}
-      description={current ? `Now: ${current.title}` : "No roadmap yet"}
-      meta={
-        <View className="gap-1 pt-1">
-          {progress.total > 0 ? (
-            <ProgressLine done={progress.done} total={progress.total} label="milestones" />
-          ) : null}
-          {goal.orchestrator ? (
-            <Text textRole="footnote" className="text-foreground-muted">
-              {modelLabel(snapshot.accounts, goal.orchestrator.model)}
-            </Text>
-          ) : null}
-        </View>
-      }
-      onPress={props.onPress}
-    />
   );
 }

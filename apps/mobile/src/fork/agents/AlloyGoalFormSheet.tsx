@@ -1,16 +1,21 @@
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { AlloyCompanyId, AlloyGoalId, type AlloyGoal } from "@t3tools/contracts/alloy";
+import {
+  AlloyGoalId,
+  type AlloyCompany,
+  type AlloyCompanyId,
+  type AlloyGoal,
+  type AlloySnapshot,
+} from "@t3tools/contracts/alloy";
 import { useRef, useState } from "react";
 
 import { AppTextInput as TextInput } from "../../components/ui/AppText";
-import * as Dialog from "../../components/ui/Dialog";
 import { ListActionRow } from "../../components/ui/ListActionRow";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { ListSection } from "../../components/ui/ListSection";
 import { useProjects } from "../../state/entities";
 import { AlloySheet, Muted, NotFound, WithSnapshot } from "./AlloyLayout";
-import { useAlloyCommand, useAlloySnapshot } from "./alloy-state";
+import { useAlloyCommand, useAlloySnapshot, useNewCompanyPrompt } from "./alloy-state";
 
 const INPUT_CLASS = "min-h-12 rounded-[20px] bg-grouped-card px-4 text-base text-foreground";
 const MULTILINE_CLASS = "min-h-40 rounded-[20px] bg-grouped-card p-4 text-base text-foreground";
@@ -22,18 +27,12 @@ export function AlloyNewGoalSheet({
   const navigation = useNavigation();
   const query = useAlloySnapshot(environmentId);
   const run = useAlloyCommand(environmentId);
-  const projects = useProjects().filter(
-    (project) => project.environmentId === environmentId && project.archivedAt == null,
-  );
-  const [companyId, setCompanyId] = useState<AlloyCompanyId | null>(null);
-  const [projectId, setProjectId] = useState<ProjectId | null>(null);
+  const placement = usePlacement(environmentId, query.data?.companies ?? []);
+  const { selectedCompany, selectedProject } = placement;
   const [title, setTitle] = useState("");
   const [vision, setVision] = useState("");
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
-  const companies = query.data?.companies ?? [];
-  const selectedCompany = companyId ?? (companies.length === 1 ? companies[0]!.id : null);
-  const selectedProject = projectId ?? (projects.length === 1 ? projects[0]!.id : null);
   const ready = selectedCompany !== null && selectedProject !== null && title.trim().length > 0;
 
   const create = async () => {
@@ -56,60 +55,78 @@ export function AlloyNewGoalSheet({
     }
   };
 
-  const createCompany = async (name: string) => {
-    if (!name.trim()) return;
-    const result = await run({ _tag: "createCompany", name: name.trim() });
-    if (result?.id) setCompanyId(AlloyCompanyId.make(result.id));
-  };
-  const newCompany = () =>
-    Dialog.prompt({
-      title: "New company",
-      message: "A company owns goals and ranks the models they use.",
-      placeholder: "Name",
-      initialValue: "",
-      confirmText: "Create",
-      onConfirm: (name) => void createCompany(name),
-    });
-
   return (
     <AlloySheet
-      title="New goal"
+      title="New agent"
       confirm={{ label: "Create", onPress: () => void create(), disabled: !ready, loading: busy }}
     >
       <WithSnapshot query={query}>
         {(snapshot) => (
           <>
-            <ListSection title="Company">
-              {snapshot.companies.map((company) => (
-                <ListChoiceRow
-                  key={company.id}
-                  label={company.name}
-                  selected={company.id === selectedCompany}
-                  onPress={() => setCompanyId(company.id)}
-                />
-              ))}
-              <ListActionRow icon="plus" label="New company…" onPress={newCompany} />
-            </ListSection>
-            <ListSection title="Project">
-              {projects.length === 0 ? (
-                <Muted className="p-4">Add a project on the Alloy server first.</Muted>
-              ) : (
-                projects.map((project) => (
-                  <ListChoiceRow
-                    key={project.id}
-                    label={project.title}
-                    description={project.workspaceRoot}
-                    selected={project.id === selectedProject}
-                    onPress={() => setProjectId(project.id)}
-                  />
-                ))
-              )}
-            </ListSection>
+            <PlacementFields environmentId={environmentId} snapshot={snapshot} {...placement} />
             <GoalFields title={title} vision={vision} onTitle={setTitle} onVision={setVision} />
           </>
         )}
       </WithSnapshot>
     </AlloySheet>
+  );
+}
+
+type Placement = ReturnType<typeof usePlacement>;
+
+/** Which company and project a new agent belongs to; a lone option is picked for you. */
+export function usePlacement(environmentId: EnvironmentId, companies: ReadonlyArray<AlloyCompany>) {
+  const projects = useProjects().filter(
+    (project) => project.environmentId === environmentId && project.archivedAt == null,
+  );
+  const [companyId, setCompanyId] = useState<AlloyCompanyId | null>(null);
+  const [projectId, setProjectId] = useState<ProjectId | null>(null);
+  return {
+    projects,
+    selectedCompany: companyId ?? (companies.length === 1 ? companies[0]!.id : null),
+    selectedProject: projectId ?? (projects.length === 1 ? projects[0]!.id : null),
+    setCompanyId,
+    setProjectId,
+  };
+}
+
+export function PlacementFields(
+  props: Placement & { readonly environmentId: EnvironmentId; readonly snapshot: AlloySnapshot },
+) {
+  const newCompany = useNewCompanyPrompt(props.environmentId);
+  return (
+    <>
+      <ListSection title="Company">
+        {props.snapshot.companies.map((company) => (
+          <ListChoiceRow
+            key={company.id}
+            label={company.name}
+            selected={company.id === props.selectedCompany}
+            onPress={() => props.setCompanyId(company.id)}
+          />
+        ))}
+        <ListActionRow
+          icon="plus"
+          label="New company…"
+          onPress={() => newCompany(props.setCompanyId)}
+        />
+      </ListSection>
+      <ListSection title="Project">
+        {props.projects.length === 0 ? (
+          <Muted className="p-4">Add a project on the Alloy server first.</Muted>
+        ) : (
+          props.projects.map((project) => (
+            <ListChoiceRow
+              key={project.id}
+              label={project.title}
+              description={project.workspaceRoot}
+              selected={project.id === props.selectedProject}
+              onPress={() => props.setProjectId(project.id)}
+            />
+          ))
+        )}
+      </ListSection>
+    </>
   );
 }
 

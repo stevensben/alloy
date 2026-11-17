@@ -1,4 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
+import type { EnvironmentId } from "@t3tools/contracts";
 import type { AlloySnapshot } from "@t3tools/contracts/alloy";
 import type { ReactNode } from "react";
 import { View } from "react-native";
@@ -14,9 +15,11 @@ import { Progress } from "../../components/ui/Progress";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
 import { SheetPane } from "../../components/ui/SheetPane";
+import { openSettings } from "../../features/settings/settings-navigation";
 import { cn } from "../../lib/cn";
 import type { EnvironmentQueryView } from "../../state/query";
 import { progressFraction } from "./alloy-model";
+import { useAlloyEnvironment } from "./alloy-state";
 
 function ScrollBody(props: { readonly children: ReactNode }) {
   const insets = useSafeAreaInsets();
@@ -81,6 +84,33 @@ export function AlloySheet(props: {
   );
 }
 
+function Spinner() {
+  return (
+    <View className="items-center py-10">
+      <AppActivityIndicator colorClassName="accent-icon" />
+    </View>
+  );
+}
+
+/** Renders once a connected environment answers as Alloy, else a spinner or how to connect one. */
+export function AlloyEnvironmentGate(props: {
+  readonly children: (environmentId: EnvironmentId) => ReactNode;
+}) {
+  const navigation = useNavigation();
+  const choice = useAlloyEnvironment();
+  if (choice._tag === "found") return props.children(choice.environmentId);
+  if (choice._tag === "probing") return <Spinner />;
+  return (
+    <EmptyState
+      variant="plain"
+      title="Connect this app to your Alloy server"
+      detail="Agents live on the Mac running Alloy. None of the environments this phone is connected to answers as Alloy, so add that one in Environments."
+      actionLabel="Open Environments"
+      onAction={() => openSettings(navigation, "SettingsEnvironments")}
+    />
+  );
+}
+
 /** Renders the snapshot once loaded, else a spinner or the error. */
 export function WithSnapshot(props: {
   readonly query: EnvironmentQueryView<AlloySnapshot>;
@@ -98,11 +128,7 @@ export function WithSnapshot(props: {
       />
     );
   }
-  return (
-    <View className="items-center py-10">
-      <AppActivityIndicator colorClassName="accent-icon" />
-    </View>
-  );
+  return <Spinner />;
 }
 
 export function NotFound(props: { readonly what: string }) {

@@ -38,11 +38,24 @@ export function chooseAlloyEnvironment<Id extends string>(
     : { _tag: "none" };
 }
 
-export const GOAL_STATUS_LABEL: Record<AlloyGoalStatus, string> = {
+const GOAL_STATUS_LABEL: Record<AlloyGoalStatus, string> = {
   draft: "Draft",
   running: "Running",
   paused: "Paused",
   done: "Done",
+};
+
+/** A draft whose agent is already running is being planned with Ben in its thread. */
+export function goalStatusLabel(goal: Pick<AlloyGoal, "status" | "orchestrator">): string {
+  return goal.status === "draft" && goal.orchestrator !== null
+    ? "Planning with you"
+    : GOAL_STATUS_LABEL[goal.status];
+}
+
+export const PROPOSAL_KIND_LABEL: Record<AlloyProposal["body"]["_tag"], string> = {
+  roadmap: "Roadmap change",
+  idea: "Idea",
+  vision: "Vision change",
 };
 
 const GOAL_STATUS_ORDER: Record<AlloyGoalStatus, number> = {
@@ -100,6 +113,25 @@ export function currentMilestone(milestones: ReadonlyArray<AlloyMilestone>): All
     milestones.find((milestone) => milestone.status !== "done") ??
     null
   );
+}
+
+/** An agent row's subtitle: status, current milestone and progress, then the model. */
+export function agentSubtitle(
+  goal: AlloyGoal,
+  milestones: ReadonlyArray<AlloyMilestone>,
+  accounts: ReadonlyArray<AlloyAccount>,
+): string {
+  const roadmap = goalMilestones(milestones, goal.id);
+  const current = currentMilestone(roadmap);
+  const progress = roadmapProgress(roadmap);
+  const status = [
+    goalStatusLabel(goal),
+    current ? `Now: ${current.title}` : null,
+    progress.total > 0 ? `${progress.done}/${progress.total} milestones` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return goal.orchestrator ? `${status}\n${modelLabel(accounts, goal.orchestrator.model)}` : status;
 }
 
 /** Roughly whether text runs past `lines` lines on a phone, without measuring layout. */
@@ -216,7 +248,7 @@ export function accountUsageSummary(account: AlloyAccount, nowMs: number): strin
   return resets === null ? used : `${used} · ${resets}`;
 }
 
-/** One line for the Agents screen: how many accounts are ready and the busiest one's usage. */
+/** One line for Settings › Alloy: how many accounts are ready and the busiest one's usage. */
 export function accountsOverview(accounts: ReadonlyArray<AlloyAccount>, nowMs: number): string {
   const ready = accounts.filter((account) => account.available);
   if (ready.length === 0) return "None set up yet";

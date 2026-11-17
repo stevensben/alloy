@@ -51,6 +51,30 @@ const handlers = {
       return { goalId, context };
     }),
   ),
+  alloy_define_goal: McpToolAccess.actsAsCaller((input) =>
+    Effect.gen(function* () {
+      const { alloy, goalId, author } = yield* resolveCaller(input.goalId);
+      yield* alloy
+        .defineGoal({ goalId, author, title: input.title, vision: input.vision })
+        .pipe(Effect.mapError(toMcpFailure));
+      return { message: "Saved. Now propose a first roadmap with `alloy_propose_roadmap`." };
+    }),
+  ),
+  alloy_propose_vision: McpToolAccess.actsAsCaller((input) =>
+    Effect.gen(function* () {
+      const { alloy, goalId, author } = yield* resolveCaller(input.goalId);
+      const proposalId = yield* alloy
+        .proposeVision({
+          goalId,
+          author,
+          title: input.title,
+          rationale: input.rationale,
+          vision: input.vision,
+        })
+        .pipe(Effect.mapError(toMcpFailure));
+      return { proposalId, message: "Proposed. Wait for Ben's decision before acting on it." };
+    }),
+  ),
   alloy_propose_roadmap: McpToolAccess.actsAsCaller((input) =>
     Effect.gen(function* () {
       const { alloy, goalId, author } = yield* resolveCaller(input.goalId);

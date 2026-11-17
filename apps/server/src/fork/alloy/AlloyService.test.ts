@@ -269,6 +269,80 @@ it.layer(makeLayer(harness))("AlloyService", (it) => {
     }),
   );
 
+  it.effect("creates an agent that plans its goal with Ben before it starts work", () =>
+    Effect.gen(function* () {
+      const alloy = yield* AlloyService.AlloyService;
+      const companyId = (yield* run({ _tag: "createCompany", name: "Heritage" })) as never;
+      const unroutable = yield* Effect.flip(
+        alloy.command({
+          _tag: "createAgent",
+          companyId,
+          projectId,
+          brief: "Build the family tree export",
+          model: null,
+        }),
+      );
+      assert.include(unroutable.message, "no ranked models");
+      const goalCount = (yield* alloy.snapshot).goals.length;
+
+      const launchCount = harness.launches.length;
+      const goalId = (yield* run({
+        _tag: "createAgent",
+        companyId,
+        projectId,
+        brief: "Build the family tree export\nIt should handle 10k people.",
+        model: opus,
+      })) as never;
+      const launch = harness.launches[launchCount];
+      assert.strictEqual(launch?.title, "Alloy · Build the family tree export");
+      assert.include(launch?.initialMessage?.text ?? "", "one question at a time");
+      assert.include(launch?.initialMessage?.text ?? "", "It should handle 10k people.");
+      const created = (yield* alloy.snapshot).goals.find((goal) => goal.id === goalId);
+      assert.strictEqual((yield* alloy.snapshot).goals.length, goalCount + 1);
+      assert.strictEqual(created?.status, "draft");
+      assert.strictEqual(created?.vision, "");
+      assert.deepStrictEqual(created?.orchestrator?.model, opus);
+
+      yield* alloy.defineGoal({
+        goalId,
+        author: "opus",
+        title: "Family tree export",
+        vision: "Export any tree as GEDCOM.",
+      });
+      const roadmap = yield* alloy.proposeRoadmap({
+        goalId,
+        author: "opus",
+        title: "First roadmap",
+        rationale: "Start",
+        milestones: [{ title: "Export", doneWhen: "GEDCOM validates" }],
+      });
+      yield* run({ _tag: "decideProposal", proposalId: roadmap, decision: "approved", note: null });
+      const running = (yield* alloy.snapshot).goals.find((goal) => goal.id === goalId);
+      assert.deepStrictEqual(
+        [running?.title, running?.vision, running?.status],
+        ["Family tree export", "Export any tree as GEDCOM.", "running"],
+      );
+      assert.include(harness.sent.at(-1) ?? "", "Begin work");
+
+      const late = yield* Effect.flip(
+        alloy.defineGoal({ goalId, author: "opus", title: "Other", vision: "Other" }),
+      );
+      assert.include(late.message, "alloy_propose_vision");
+
+      const vision = yield* alloy.proposeVision({
+        goalId,
+        author: "opus",
+        title: "Add CSV",
+        rationale: "Ben asked",
+        vision: "Export any tree as GEDCOM or CSV.",
+      });
+      yield* run({ _tag: "decideProposal", proposalId: vision, decision: "approved", note: null });
+      const revised = (yield* alloy.snapshot).goals.find((goal) => goal.id === goalId);
+      assert.strictEqual(revised?.vision, "Export any tree as GEDCOM or CSV.");
+      assert.include(harness.sent.at(-1) ?? "", 'Ben approved your vision proposal "Add CSV"');
+    }),
+  );
+
   it.effect("keeps its own migration ledger", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;

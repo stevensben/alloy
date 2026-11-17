@@ -7,7 +7,12 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { WS_METHODS, type EnvironmentId } from "@t3tools/contracts";
-import type { AlloyCommand, AlloyCommandResult } from "@t3tools/contracts/alloy";
+import {
+  AlloyCompanyId,
+  type AlloyCommand,
+  type AlloyCommandResult,
+  type AlloySnapshot,
+} from "@t3tools/contracts/alloy";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
@@ -16,9 +21,10 @@ import { useCallback } from "react";
 import * as Dialog from "../../components/ui/Dialog";
 import { connectionAtomRuntime } from "../../connection/runtime";
 import { homeListFilterEnvironments } from "../../features/home/home-list-filter-menu";
+import { useHomeListOptions } from "../../features/home/home-list-options";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { workspaceConnections } from "../../state/workspace";
+import { useWorkspaceEnvironments, workspaceConnections } from "../../state/workspace";
 import { chooseAlloyEnvironment, type AlloyProbe } from "./alloy-model";
 
 const POLL_INTERVAL_MS = 5_000;
@@ -36,6 +42,11 @@ const alloyCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
   tag: WS_METHODS.alloyCommand,
   onSuccess: ({ environmentId }, registry) =>
     Effect.sync(() => registry.refresh(alloySnapshot(snapshotTarget(environmentId)))),
+});
+
+const alloySnapshotFetch = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "alloy:snapshot-fetch",
+  tag: WS_METHODS.alloySnapshot,
 });
 
 function probe(result: AsyncResult.AsyncResult<unknown, unknown>): AlloyProbe {
@@ -58,8 +69,13 @@ const alloyEnvironmentAtom = Atom.family((preferred: string) =>
   ).pipe(Atom.withLabel(`alloy:environment:${preferred}`)),
 );
 
-export function useAlloyEnvironment(preferred: EnvironmentId | null) {
-  return useAtomValue(alloyEnvironmentAtom(preferred ?? ""));
+/** The Alloy environment, preferring the one the thread list is filtered to. */
+export function useAlloyEnvironment() {
+  const environments = homeListFilterEnvironments(useWorkspaceEnvironments());
+  const { options } = useHomeListOptions(
+    new Set(environments.map((environment) => environment.environmentId)),
+  );
+  return useAtomValue(alloyEnvironmentAtom(options.selectedEnvironmentId ?? ""));
 }
 
 /** The snapshot, refetched on focus and every few seconds while the screen stays focused. */
@@ -91,4 +107,35 @@ export function useAlloyCommand(environmentId: EnvironmentId) {
     }
     return null;
   };
+}
+
+/** Fetches a fresh snapshot, for reading what a command just created. */
+export function useAlloySnapshotFetch(environmentId: EnvironmentId) {
+  const fetch = useAtomCommand(alloySnapshotFetch, {
+    label: "alloy snapshot",
+    reportFailure: false,
+  });
+  return async (): Promise<AlloySnapshot | null> => {
+    const result = await fetch({ environmentId, input: {} });
+    return result._tag === "Success" ? result.value : null;
+  };
+}
+
+/** Prompts for a company name and creates it. */
+export function useNewCompanyPrompt(environmentId: EnvironmentId) {
+  const run = useAlloyCommand(environmentId);
+  return (onCreated?: (companyId: AlloyCompanyId) => void) =>
+    Dialog.prompt({
+      title: "New company",
+      message: "A company owns agents and ranks the models they use.",
+      placeholder: "Name",
+      initialValue: "",
+      confirmText: "Create",
+      onConfirm: (name) => {
+        if (!name.trim()) return;
+        void run({ _tag: "createCompany", name: name.trim() }).then((result) => {
+          if (result?.id) onCreated?.(AlloyCompanyId.make(result.id));
+        });
+      },
+    });
 }

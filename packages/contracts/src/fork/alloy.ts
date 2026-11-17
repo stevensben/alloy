@@ -94,6 +94,8 @@ export const AlloyProposalBody = Schema.Union([
   Schema.TaggedStruct("roadmap", { milestones: Schema.Array(AlloyRoadmapItem) }),
   /** An observation or improvement that is not a roadmap change. */
   Schema.TaggedStruct("idea", {}),
+  /** Replaces the goal's vision on approval. */
+  Schema.TaggedStruct("vision", { vision: Schema.String }),
 ]);
 export type AlloyProposalBody = typeof AlloyProposalBody.Type;
 
@@ -219,6 +221,13 @@ export const AlloyCommand = Schema.Union([
     projectId: ProjectId,
     title: TrimmedNonEmptyString,
     vision: Schema.String,
+  }),
+  /** Creates a draft goal and starts its orchestrator, which plans the goal with Ben first. */
+  Schema.TaggedStruct("createAgent", {
+    companyId: AlloyCompanyId,
+    projectId: ProjectId,
+    brief: TrimmedNonEmptyString,
+    model: Schema.NullOr(AlloyModelChoice),
   }),
   Schema.TaggedStruct("updateGoal", {
     goalId: AlloyGoalId,

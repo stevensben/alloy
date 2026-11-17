@@ -14,11 +14,13 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   accountsOverview,
   accountUsageSummary,
+  agentSubtitle,
   chooseAlloyEnvironment,
   currentMilestone,
   formatDuration,
   formatResetsIn,
   goalMilestones,
+  goalStatusLabel,
   groupGoalsByCompany,
   modelLabel,
   moveItem,
@@ -158,6 +160,40 @@ describe("goals", () => {
     expect(currentMilestone(roadmap)?.position).toBe(1);
     expect(currentMilestone([milestone(0, "done"), milestone(1, "upcoming")])?.position).toBe(1);
     expect(currentMilestone([milestone(0, "done")])).toBeNull();
+  });
+});
+
+describe("agents", () => {
+  it("reads a draft with a running agent as planning", () => {
+    const draft = goal("goal", "co", "draft", "2026-11-17T00:00:00.000Z");
+    expect(goalStatusLabel(draft)).toBe("Draft");
+    expect(
+      goalStatusLabel({
+        ...draft,
+        orchestrator: {
+          threadId: "thread" as never,
+          model: { instanceId: instance, model: "opus" },
+          routingNote: "",
+          startedAt: draft.createdAt,
+        },
+      }),
+    ).toBe("Planning with you");
+  });
+
+  it("subtitles a row with status, current milestone, progress and model", () => {
+    const running = {
+      ...goal("goal", "co", "running", "2026-11-17T00:00:00.000Z"),
+      orchestrator: {
+        threadId: "thread" as never,
+        model: { instanceId: instance, model: "opus" },
+        routingNote: "",
+        startedAt: "2026-11-17T00:00:00.000Z",
+      },
+    };
+    expect(
+      agentSubtitle(running, [milestone(0, "done"), milestone(1, "current")], [account([])]),
+    ).toBe("Running · Now: Milestone 1 · 1/2 milestones\nClaude Opus · Work");
+    expect(agentSubtitle(goal("goal", "co", "draft", running.createdAt), [], [])).toBe("Draft");
   });
 });
 

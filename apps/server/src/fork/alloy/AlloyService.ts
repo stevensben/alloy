@@ -37,13 +37,16 @@ import {
   applyRoadmap,
   buildCompPrompt,
   buildOrchestratorBrief,
+  buildPlanningBrief,
   computeScores,
+  goalStatusAfterDecision,
   lessonsForGoal,
   reportProgress as applyProgressReport,
   type ProgressReport,
   routeModel,
   toAlloyAccount,
   toRoutingAccount,
+  titleFromBrief,
 } from "./domain.ts";
 
 type Failure = AlloyError | AlloyStore.AlloyStoreError;
@@ -74,6 +77,17 @@ export class AlloyService extends Context.Service<
         readonly title: string;
         readonly rationale: string;
         readonly milestones: ReadonlyArray<AlloyRoadmapItem>;
+      },
+    ) => Effect.Effect<AlloyProposalId, Failure>;
+    /** Sets the title and vision while the goal is still being planned. */
+    readonly defineGoal: (
+      input: AgentReport & { readonly title: string; readonly vision: string },
+    ) => Effect.Effect<void, Failure>;
+    readonly proposeVision: (
+      input: AgentReport & {
+        readonly title: string;
+        readonly rationale: string;
+        readonly vision: string;
       },
     ) => Effect.Effect<AlloyProposalId, Failure>;
     readonly logIdea: (
@@ -200,6 +214,60 @@ const make = Effect.gen(function* () {
     return updated;
   });
 
+  /** `null` follows the company's ranking; an unroutable ranking fails with the reason. */
+  const routeFor = Effect.fn("AlloyService.routeFor")(function* (
+    company: AlloyCompany,
+    model: AlloyModelChoice | null,
+  ) {
+    if (model !== null) return { choice: model, note: "Chosen by you." };
+    const route = routeModel(
+      company.modelRanking,
+      yield* routingAccounts,
+      DateTime.toEpochMillis(yield* DateTime.now),
+    );
+    return route._tag === "Unroutable" ? yield* fail(route.message) : route;
+  });
+
+  const launchOrchestrator = Effect.fn("AlloyService.launchOrchestrator")(function* (
+    goal: AlloyGoal,
+    route: { readonly choice: AlloyModelChoice; readonly note: string },
+    text: string,
+  ) {
+    const startedAt = yield* nowIso;
+    const id = yield* uuid;
+    const launched = yield* launcher
+      .launch({
+        commandId: CommandId.make(`alloy:goal:${goal.id}:${id}`),
+        projectId: goal.projectId,
+        title: `Alloy · ${goal.title}`,
+        modelSelection: { instanceId: route.choice.instanceId, model: route.choice.model },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        workspaceStrategy: { type: "root" },
+        initialMessage: {
+          messageId: MessageId.make(`alloy-message:${id}`),
+          text,
+          attachments: [],
+        },
+        ...ORIGIN,
+      })
+      .pipe(
+        Effect.mapError(
+          (error) =>
+            new AlloyError({ message: `Could not start the orchestrator: ${error.message}` }),
+        ),
+      );
+    yield* saveGoal(goal, {
+      orchestrator: {
+        threadId: launched.threadId,
+        model: route.choice,
+        routingNote: route.note,
+        startedAt,
+      },
+    });
+    yield* addActivity(goal.id, ALLOY, `Started the orchestrator. ${route.note}`);
+  });
+
   const startGoal = Effect.fn("AlloyService.startGoal")(function* (
     goalId: AlloyGoalId,
     model: AlloyModelChoice | null,
@@ -214,50 +282,41 @@ const make = Effect.gen(function* () {
       yield* addActivity(goal.id, BEN, "Resumed the goal.");
       return;
     }
-    const company = yield* requireCompany(goal.companyId);
-    const route =
-      model === null
-        ? routeModel(
-            company.modelRanking,
-            yield* routingAccounts,
-            DateTime.toEpochMillis(yield* DateTime.now),
-          )
-        : ({ _tag: "Routed", choice: model, note: "Chosen by you." } as const);
-    if (route._tag === "Unroutable") return yield* fail(route.message);
-    const startedAt = yield* nowIso;
-    const id = yield* uuid;
-    const launched = yield* launcher
-      .launch({
-        commandId: CommandId.make(`alloy:goal:${goal.id}:${id}`),
-        projectId: goal.projectId,
-        title: `Alloy · ${goal.title}`,
-        modelSelection: { instanceId: route.choice.instanceId, model: route.choice.model },
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        workspaceStrategy: { type: "root" },
-        initialMessage: {
-          messageId: MessageId.make(`alloy-message:${id}`),
-          text: yield* brief({ ...goal, status: "running" }),
-          attachments: [],
-        },
-        ...ORIGIN,
-      })
-      .pipe(
-        Effect.mapError(
-          (error) =>
-            new AlloyError({ message: `Could not start the orchestrator: ${error.message}` }),
-        ),
-      );
-    yield* saveGoal(goal, {
-      status: "running",
-      orchestrator: {
-        threadId: launched.threadId,
-        model: route.choice,
-        routingNote: route.note,
-        startedAt,
-      },
-    });
-    yield* addActivity(goal.id, ALLOY, `Started the orchestrator. ${route.note}`);
+    const route = yield* routeFor(yield* requireCompany(goal.companyId), model);
+    const running: AlloyGoal = { ...goal, status: "running" };
+    yield* launchOrchestrator(running, route, yield* brief(running));
+  });
+
+  const createAgent = Effect.fn("AlloyService.createAgent")(function* (
+    input: Extract<AlloyCommand, { readonly _tag: "createAgent" }>,
+  ) {
+    const company = yield* requireCompany(input.companyId);
+    const route = yield* routeFor(company, input.model);
+    const createdAt = yield* nowIso;
+    const goal: AlloyGoal = {
+      id: AlloyGoalId.make(yield* uuid),
+      companyId: company.id,
+      projectId: input.projectId,
+      title: titleFromBrief(input.brief),
+      vision: "",
+      status: "draft",
+      orchestrator: null,
+      createdAt,
+      updatedAt: createdAt,
+    };
+    yield* store.saveGoal(goal);
+    yield* addActivity(goal.id, BEN, `Created the agent: ${input.brief}`);
+    yield* launchOrchestrator(
+      goal,
+      route,
+      buildPlanningBrief({
+        company,
+        goal,
+        brief: input.brief,
+        lessons: lessonsForGoal(yield* store.lessons, goal),
+      }),
+    );
+    return goal.id;
   });
 
   const setGoalStatus = Effect.fn("AlloyService.setGoalStatus")(function* (
@@ -302,6 +361,9 @@ const make = Effect.gen(function* () {
     const note = rawNote === null || rawNote.trim() === "" ? null : rawNote.trim();
     const decidedAt = yield* nowIso;
     const applyingRoadmap = decision === "approved" && proposal.body._tag === "roadmap";
+    const newVision =
+      decision === "approved" && proposal.body._tag === "vision" ? proposal.body.vision : null;
+    const status = goalStatusAfterDecision(goal.status, decision, proposal.body);
     const existing = applyingRoadmap ? yield* store.milestones(goal.id) : [];
     const lessonId = AlloyLessonId.make(yield* uuid);
     const suffix = note === null ? "" : `: ${note}`;
@@ -316,6 +378,12 @@ const make = Effect.gen(function* () {
               AlloyMilestoneId.make(`${proposal.id}-${position}`),
             ),
           );
+        }
+        if (newVision !== null || status !== goal.status) {
+          yield* saveGoal(goal, { status, vision: newVision ?? goal.vision });
+        }
+        if (status !== goal.status) {
+          yield* addActivity(goal.id, ALLOY, "Planning is done. The agent starts work.");
         }
         if (decision === "rejected") {
           yield* store.saveLesson({
@@ -334,9 +402,13 @@ const make = Effect.gen(function* () {
     yield* notifyOrchestrator(
       goal,
       [
-        `Ben ${decision} your ${proposal.body._tag === "roadmap" ? "roadmap proposal" : "idea"} "${proposal.title}".`,
+        `Ben ${decision} your ${proposalNoun[proposal.body._tag]} "${proposal.title}".`,
         ...(note === null ? [] : [`Note: ${note}`]),
         ...(applyingRoadmap ? ["The roadmap is updated. Call `alloy_goal_context` for it."] : []),
+        ...(newVision === null ? [] : ["The vision is updated. Call `alloy_goal_context` for it."]),
+        ...(status === goal.status
+          ? []
+          : ["Planning is done and the goal is running. Begin work on the first milestone now."]),
         ...(decision === "rejected" ? ["This is now a lesson for the goal."] : []),
       ].join("\n"),
     );
@@ -542,6 +614,8 @@ const make = Effect.gen(function* () {
         yield* addActivity(goal.id, BEN, "Created the goal.");
         return withId(goal.id);
       }
+      case "createAgent":
+        return withId(yield* createAgent(input));
       case "updateGoal": {
         const goal = yield* requireGoal(input.goalId);
         yield* saveGoal(goal, { title: input.title, vision: input.vision });
@@ -630,11 +704,7 @@ const make = Effect.gen(function* () {
       decidedAt: null,
     };
     yield* store.saveProposal(proposal);
-    yield* addActivity(
-      goal.id,
-      input.author,
-      `Proposed ${body._tag === "roadmap" ? "a roadmap" : "an idea"}: "${title}"`,
-    );
+    yield* addActivity(goal.id, input.author, `Proposed ${proposalArticle[body._tag]}: "${title}"`);
     return proposal.id;
   });
 
@@ -692,6 +762,23 @@ const make = Effect.gen(function* () {
       }
       return yield* propose(input, { _tag: "roadmap", milestones });
     }),
+    defineGoal: Effect.fn("AlloyService.defineGoal")(function* (input) {
+      const goal = yield* requireGoal(input.goalId);
+      if (goal.status !== "draft") {
+        return yield* fail(
+          "This goal is past planning, so its vision is Ben's to change. Propose a new one with `alloy_propose_vision`.",
+        );
+      }
+      const title = input.title.trim();
+      const vision = input.vision.trim();
+      if (title === "" || vision === "") return yield* fail("Pass both a title and a vision.");
+      yield* saveGoal(goal, { title, vision });
+      yield* addActivity(goal.id, input.author, `Defined the goal: "${title}"`);
+    }),
+    proposeVision: Effect.fn("AlloyService.proposeVision")(function* ({ vision, ...input }) {
+      if (vision.trim() === "") return yield* fail("A vision proposal needs the new vision.");
+      return yield* propose(input, { _tag: "vision", vision: vision.trim() });
+    }),
     logIdea: Effect.fn("AlloyService.logIdea")(function* (input) {
       return yield* propose(input, { _tag: "idea" });
     }),
@@ -701,5 +788,17 @@ const make = Effect.gen(function* () {
 });
 
 const decisionVerb = { approved: "Approved", rejected: "Rejected", noted: "Noted" } as const;
+
+const proposalNoun = {
+  roadmap: "roadmap proposal",
+  idea: "idea",
+  vision: "vision proposal",
+} as const satisfies Record<AlloyProposalBody["_tag"], string>;
+
+const proposalArticle = {
+  roadmap: "a roadmap",
+  idea: "an idea",
+  vision: "a new vision",
+} as const satisfies Record<AlloyProposalBody["_tag"], string>;
 
 export const layer = Layer.effect(AlloyService, make).pipe(Layer.provide(AlloyStore.layer));

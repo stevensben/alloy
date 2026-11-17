@@ -1,6 +1,6 @@
 import type { MenuAction } from "@react-native-menu/menu";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type {
   AlloyCommand,
   AlloyGoal,
@@ -28,14 +28,15 @@ import { useNowMinuteMs } from "../../lib/clock";
 import { relativeTime } from "../../lib/time";
 import { AlloyPage, Muted, NotFound, ProgressLine, WithSnapshot } from "./AlloyLayout";
 import {
-  GOAL_STATUS_LABEL,
   goalActivity,
   goalMilestones,
+  goalStatusLabel,
   isLongText,
   modelLabel,
   modelOptions,
   pendingProposals,
   progressFraction,
+  PROPOSAL_KIND_LABEL,
   roadmapProgress,
 } from "./alloy-model";
 import { useAlloyCommand, useAlloySnapshot } from "./alloy-state";
@@ -49,10 +50,7 @@ export function AlloyGoalScreen({ route }: StaticScreenProps<GoalParams>) {
   const query = useAlloySnapshot(route.params.environmentId);
   const goal = query.data?.goals.find((candidate) => candidate.id === route.params.goalId);
   return (
-    <AlloyPage
-      title={goal?.title ?? "Goal"}
-      subtitle={goal ? GOAL_STATUS_LABEL[goal.status] : undefined}
-    >
+    <AlloyPage title={goal?.title ?? "Agent"} subtitle={goal ? goalStatusLabel(goal) : undefined}>
       <WithSnapshot query={query}>
         {(snapshot) => {
           const current = snapshot.goals.find((candidate) => candidate.id === route.params.goalId);
@@ -63,7 +61,7 @@ export function AlloyGoalScreen({ route }: StaticScreenProps<GoalParams>) {
               snapshot={snapshot}
             />
           ) : (
-            <NotFound what="goal" />
+            <NotFound what="agent" />
           );
         }}
       </WithSnapshot>
@@ -88,6 +86,9 @@ function GoalBody(props: {
 
   return (
     <>
+      {goal.status === "draft" && goal.orchestrator ? (
+        <Planning environmentId={environmentId} threadId={goal.orchestrator.threadId} />
+      ) : null}
       <GoalHeader
         environmentId={environmentId}
         goal={goal}
@@ -140,6 +141,35 @@ function GoalBody(props: {
   );
 }
 
+function useOpenThread(environmentId: EnvironmentId) {
+  const navigation = useNavigation();
+  return (threadId: ThreadId) =>
+    navigation.dispatch(StackActions.push("Thread", { environmentId, threadId }));
+}
+
+function Planning(props: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId }) {
+  const openThread = useOpenThread(props.environmentId);
+  return (
+    <ListSection title="Planning with you">
+      <View className="gap-3 p-4">
+        <Muted>
+          The agent is asking about this goal in its conversation. Once the picture is clear it
+          saves the vision and proposes a roadmap here for you to approve.
+        </Muted>
+        <View className="self-start">
+          <Button
+            label="Open conversation"
+            icon="bubble.left.and.bubble.right"
+            tone="primary"
+            size="compact"
+            onPress={() => openThread(props.threadId)}
+          />
+        </View>
+      </View>
+    </ListSection>
+  );
+}
+
 function GoalHeader(props: {
   readonly environmentId: EnvironmentId;
   readonly goal: AlloyGoal;
@@ -150,12 +180,12 @@ function GoalHeader(props: {
   const navigation = useNavigation();
   return (
     <ListSection>
-      <ListRowLayout label="Status" detail={GOAL_STATUS_LABEL[goal.status]} />
+      <ListRowLayout label="Status" detail={goalStatusLabel(goal)} />
       <ListRow
         label="Company"
         detail={props.companyName}
         onPress={() =>
-          navigation.navigate("AlloyCompany", {
+          navigation.navigate("SettingsAlloyCompany", {
             environmentId: props.environmentId,
             companyId: goal.companyId,
           })
@@ -234,7 +264,7 @@ function Roadmap(props: { readonly milestones: ReadonlyArray<AlloyMilestone> }) 
   return (
     <ListSection title="Roadmap">
       {props.milestones.length === 0 ? (
-        <Muted className="p-4">The orchestrator proposes a roadmap once the goal starts.</Muted>
+        <Muted className="p-4">The agent proposes a roadmap once it understands the goal.</Muted>
       ) : (
         <>
           <View className="px-4 pt-4">
@@ -300,9 +330,10 @@ function ProposalCard(props: {
       onConfirm: (reason) => decide("rejected", reason.trim() || null),
     });
   const roadmap = proposal.body._tag === "roadmap" ? proposal.body.milestones : null;
+  const vision = proposal.body._tag === "vision" ? proposal.body.vision : null;
   return (
     <ListSection
-      title={roadmap ? "Needs you · roadmap change" : "Needs you · idea"}
+      title={`Needs you · ${PROPOSAL_KIND_LABEL[proposal.body._tag].toLowerCase()}`}
       footer={`${proposal.author} · ${relativeTime(proposal.createdAt, nowMs)} ago`}
     >
       <View className="gap-3 p-4">
@@ -310,6 +341,11 @@ function ProposalCard(props: {
           {proposal.title}
         </Text>
         {proposal.rationale ? <Muted>{proposal.rationale}</Muted> : null}
+        {vision === null ? null : (
+          <Text textRole="body" className="text-foreground">
+            {vision}
+          </Text>
+        )}
         {roadmap ? (
           <View className="gap-2">
             {roadmap.map((item, index) => (
@@ -334,9 +370,9 @@ function ProposalCard(props: {
             size="compact"
             onPress={() => decide("approved")}
           />
-          {roadmap ? null : (
+          {proposal.body._tag === "idea" ? (
             <Button label="Noted" tone="secondary" size="compact" onPress={() => decide("noted")} />
-          )}
+          ) : null}
           <Button label="Reject" tone="danger" size="compact" onPress={reject} />
         </View>
       </View>
@@ -350,8 +386,8 @@ function GoalActions(props: {
   readonly snapshot: AlloySnapshot;
   readonly onCommand: (command: AlloyCommand) => void;
 }) {
-  const { goal, environmentId } = props;
-  const navigation = useNavigation();
+  const { goal } = props;
+  const openThread = useOpenThread(props.environmentId);
   const options = modelOptions(props.snapshot.accounts);
   const start = (model: AlloyModelChoice | null) =>
     props.onCommand({ _tag: "startGoal", goalId: goal.id, model });
@@ -362,7 +398,7 @@ function GoalActions(props: {
   const orchestrator = goal.orchestrator;
   return (
     <ListSection title="Actions">
-      {goal.status === "draft" || goal.status === "paused" ? (
+      {(goal.status === "draft" && orchestrator === null) || goal.status === "paused" ? (
         <Menu
           accessible
           accessibilityRole="button"
@@ -418,11 +454,7 @@ function GoalActions(props: {
           <ListRow
             icon="bubble.left.and.bubble.right"
             label="Open orchestrator thread"
-            onPress={() =>
-              navigation.dispatch(
-                StackActions.push("Thread", { environmentId, threadId: orchestrator.threadId }),
-              )
-            }
+            onPress={() => openThread(orchestrator.threadId)}
           />
         </>
       ) : null}

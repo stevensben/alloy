@@ -17,7 +17,8 @@ updates.
 
 ## Rule
 
-Fork code lives in `apps/mobile/src/fork/` (and later `apps/server/src/fork/`).
+Fork code lives in `apps/mobile/src/fork/`, `apps/server/src/fork/` and
+`packages/contracts/src/fork/`.
 Upstream files only get small seams: an import and a line or two that calls
 into fork code. Small seams keep upstream merges clean.
 
@@ -30,8 +31,18 @@ Current seams:
   project menus to the iPhone header.
 - `features/home/HomeScreen.tsx` hides the filter chip row on iPhone unless a
   filter is active.
-- `Stack.tsx` spreads `ALLOY_SCREENS` (goal, company, comps, lessons and their
+- `Stack.tsx` spreads `ALLOY_SCREENS` (agents, Settings › Alloy and their
   sheets) into the root stack.
+- `features/layout/workspace/useWorkspaceCompose.ts` makes every compose button
+  start a new agent while the Agents view is showing.
+- `features/settings/SettingsRouteScreen.tsx` adds the Alloy row to the
+  Settings list's Agents section.
+
+Server and contract seams:
+
+- `packages/contracts/src/rpc.ts` adds the `alloy.*` methods and RPCs.
+- `apps/server/src/server.ts` provides `AlloyService`, `ws.ts` serves its RPCs,
+  and `mcp/McpHttpServer.ts` registers the `alloy_*` agent tools.
 
 ## App identity
 

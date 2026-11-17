@@ -20,10 +20,13 @@ import * as DateTime from "effect/DateTime";
 import {
   applyRoadmap,
   buildOrchestratorBrief,
+  buildPlanningBrief,
   computeScores,
+  goalStatusAfterDecision,
   reportProgress,
   routeModel,
   type RoutingAccount,
+  titleFromBrief,
 } from "./domain.ts";
 
 const NOW = Date.parse("2026-11-17T12:00:00.000Z");
@@ -329,5 +332,61 @@ describe("buildOrchestratorBrief", () => {
     ]) {
       assert.include(brief, expected);
     }
+  });
+});
+
+describe("planning a new agent", () => {
+  it("titles the goal from the brief's first line, cut to fit a row", () => {
+    assert.strictEqual(titleFromBrief("\n  Ship the export  \nDetails"), "Ship the export");
+    const long = titleFromBrief("word ".repeat(30));
+    assert.strictEqual(long.length, 60);
+    assert.isTrue(long.endsWith("…"));
+  });
+
+  it("tells the agent to interview Ben, define the goal, propose a roadmap and wait", () => {
+    const company = {
+      id: AlloyCompanyId.make("co"),
+      name: "Mastery",
+      modelRanking: [],
+      createdAt: inHours(0),
+    };
+    const brief = buildPlanningBrief({
+      company,
+      goal: {
+        id: goalId,
+        companyId: company.id,
+        projectId: ProjectId.make("project"),
+        title: "Ship scripts",
+        vision: "",
+        status: "draft",
+        orchestrator: null,
+        createdAt: inHours(0),
+        updatedAt: inHours(0),
+      },
+      brief: "Write fifty scripts",
+      lessons: [],
+    });
+    for (const expected of [
+      "new Alloy agent for Mastery",
+      "Write fifty scripts",
+      "one question at a time",
+      "`alloy_define_goal`",
+      "`alloy_propose_roadmap`",
+      "Begin work only after he approves the roadmap.",
+      "`alloy_propose_vision`",
+    ]) {
+      assert.include(brief, expected);
+    }
+  });
+
+  it("starts a draft goal only when Ben approves a roadmap", () => {
+    const roadmap = { _tag: "roadmap", milestones: [] } as const;
+    assert.strictEqual(goalStatusAfterDecision("draft", "approved", roadmap), "running");
+    assert.strictEqual(goalStatusAfterDecision("draft", "rejected", roadmap), "draft");
+    assert.strictEqual(
+      goalStatusAfterDecision("draft", "approved", { _tag: "vision", vision: "" }),
+      "draft",
+    );
+    assert.strictEqual(goalStatusAfterDecision("paused", "approved", roadmap), "paused");
   });
 });
