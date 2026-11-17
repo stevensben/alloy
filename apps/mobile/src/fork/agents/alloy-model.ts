@@ -1,3 +1,4 @@
+import type { MenuAction } from "@react-native-menu/menu";
 import type {
   AlloyAccount,
   AlloyActivity,
@@ -135,11 +136,14 @@ export function lessonScopeLabel(
 interface ModelOption {
   readonly key: string;
   readonly choice: AlloyModelChoice;
+  readonly name: string;
   readonly label: string;
 }
 
+// Menu ids cross into native iOS menus, which cut strings at a NUL character,
+// so the key must be plain printable text.
 export const modelChoiceKey = (choice: AlloyModelChoice) =>
-  `${choice.instanceId}\u0000${choice.model}`;
+  JSON.stringify([choice.instanceId, choice.model]);
 
 export function modelOptions(accounts: ReadonlyArray<AlloyAccount>): ReadonlyArray<ModelOption> {
   return accounts
@@ -147,9 +151,37 @@ export function modelOptions(accounts: ReadonlyArray<AlloyAccount>): ReadonlyArr
     .flatMap((account) =>
       account.models.map((model) => {
         const choice = { instanceId: account.instanceId, model: model.slug };
-        return { key: modelChoiceKey(choice), choice, label: `${model.name} · ${account.label}` };
+        return {
+          key: modelChoiceKey(choice),
+          choice,
+          name: model.name,
+          label: `${model.name} · ${account.label}`,
+        };
       }),
     );
+}
+
+/** One submenu per account, so long model lists stay easy to scan. */
+export function modelMenuGroups(
+  accounts: ReadonlyArray<AlloyAccount>,
+  options: ReadonlyArray<ModelOption>,
+  selectedKey: string | null,
+): Array<MenuAction> {
+  return accounts.flatMap((account) => {
+    const models = options.filter((option) => option.choice.instanceId === account.instanceId);
+    if (models.length === 0) return [];
+    return [
+      {
+        id: `account:${account.instanceId}`,
+        title: account.label,
+        subactions: models.map((option) => ({
+          id: option.key,
+          title: option.name,
+          state: option.key === selectedKey ? ("on" as const) : ("off" as const),
+        })),
+      },
+    ];
+  });
 }
 
 export function modelName(accounts: ReadonlyArray<AlloyAccount>, choice: AlloyModelChoice) {

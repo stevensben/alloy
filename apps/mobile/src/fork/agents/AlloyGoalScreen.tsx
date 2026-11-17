@@ -34,6 +34,7 @@ import {
   goalStatusLabel,
   isLongText,
   modelLabel,
+  modelMenuGroups,
   modelOptions,
   pendingProposals,
   progressFraction,
@@ -345,7 +346,7 @@ function GoalActions(props: {
     props.onCommand({ _tag: "startGoal", goalId: goal.id, model });
   const startActions: MenuAction[] = [
     { id: "auto", title: "Auto", subtitle: "Best ranked model with headroom" },
-    ...options.map((option) => ({ id: option.key, title: option.label })),
+    ...modelMenuGroups(props.snapshot.accounts, options, null),
   ];
   const orchestrator = goal.orchestrator;
   return (

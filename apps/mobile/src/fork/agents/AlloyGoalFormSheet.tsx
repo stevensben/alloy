@@ -14,7 +14,7 @@ import { ListActionRow } from "../../components/ui/ListActionRow";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { ListSection } from "../../components/ui/ListSection";
 import { useProjects } from "../../state/entities";
-import { AlloySheet, Muted, NotFound, WithSnapshot } from "./AlloyLayout";
+import { AddProjectRow, AlloySheet, NotFound, WithSnapshot } from "./AlloyLayout";
 import { useAlloyCommand, useAlloySnapshot, useNewCompanyPrompt } from "./alloy-state";
 
 const INPUT_CLASS = "min-h-12 rounded-[20px] bg-grouped-card px-4 text-base text-foreground";
@@ -113,7 +113,7 @@ export function PlacementFields(
       </ListSection>
       <ListSection title="Project">
         {props.projects.length === 0 ? (
-          <Muted className="p-4">Add a project on the Alloy server first.</Muted>
+          <AddProjectRow environmentId={props.environmentId} />
         ) : (
           props.projects.map((project) => (
             <ListChoiceRow

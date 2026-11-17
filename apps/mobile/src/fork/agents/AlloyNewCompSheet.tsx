@@ -18,7 +18,7 @@ import { ListRowLayout } from "../../components/ui/ListRowLayout";
 import { ListSection } from "../../components/ui/ListSection";
 import { RowPressable } from "../../components/ui/RowPressable";
 import { useProjects } from "../../state/entities";
-import { AlloySheet, Muted, WithSnapshot } from "./AlloyLayout";
+import { AddProjectRow, AlloySheet, Muted, WithSnapshot } from "./AlloyLayout";
 import { knownTaskTypes, modelChoiceKey, modelOptions, toggleChoice } from "./alloy-model";
 import { useAlloyCommand, useAlloySnapshot } from "./alloy-state";
 
@@ -129,7 +129,7 @@ export function AlloyNewCompSheet({
             </ListSection>
             <ListSection title="Project">
               {projects.length === 0 ? (
-                <Muted className="p-4">Add a project on the Alloy server first.</Muted>
+                <AddProjectRow environmentId={environmentId} />
               ) : (
                 projects.map((project) => (
                   <ListChoiceRow

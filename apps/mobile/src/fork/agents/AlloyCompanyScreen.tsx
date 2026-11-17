@@ -16,7 +16,7 @@ import { ListRowLayout } from "../../components/ui/ListRowLayout";
 import { ListSection } from "../../components/ui/ListSection";
 import { Menu } from "../../components/ui/Menu";
 import { AlloyPage, Muted, NotFound, WithSnapshot } from "./AlloyLayout";
-import { modelChoiceKey, modelLabel, modelOptions, moveItem } from "./alloy-model";
+import { modelChoiceKey, modelLabel, modelMenuGroups, modelOptions, moveItem } from "./alloy-model";
 import { useAlloyCommand, useAlloySnapshot } from "./alloy-state";
 
 type CompanyParams = { readonly environmentId: EnvironmentId; readonly companyId: AlloyCompanyId };
@@ -61,10 +61,7 @@ function Ranking(props: {
   const addable = modelOptions(props.snapshot.accounts).filter(
     (option) => !rankedKeys.has(option.key),
   );
-  const addActions: MenuAction[] = addable.map((option) => ({
-    id: option.key,
-    title: option.label,
-  }));
+  const addActions: MenuAction[] = modelMenuGroups(props.snapshot.accounts, addable, null);
 
   const save = async (next: ReadonlyArray<AlloyModelChoice>) => {
     setDraft(next);

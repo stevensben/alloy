@@ -21,6 +21,8 @@ import {
   goalMilestones,
   goalStatusLabel,
   modelLabel,
+  modelMenuGroups,
+  modelOptions,
   moveItem,
   roadmapProgress,
   scoreboard,
@@ -253,5 +255,47 @@ describe("accountsOverview", () => {
         now,
       ),
     ).toBe("2 ready · Claude 42% of Weekly · resets in 3d");
+  });
+});
+
+describe("modelMenuGroups", () => {
+  const accounts = [
+    {
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      label: "Claude",
+      driver: "claudeAgent",
+      available: true,
+      models: [
+        { slug: "claude-opus-5-5", name: "Claude Opus 5.5" },
+        { slug: "claude-haiku-4-5", name: "Claude Haiku 4.5" },
+      ],
+      usage: [],
+    },
+    {
+      instanceId: ProviderInstanceId.make("grok"),
+      label: "Grok",
+      driver: "grok",
+      available: true,
+      models: [{ slug: "grok-4.7", name: "Grok 4.7" }],
+      usage: [],
+    },
+  ];
+
+  it("keeps every model with a distinct, NUL-free id", () => {
+    const options = modelOptions(accounts);
+    const ids = options.map((option) => option.key);
+    expect(new Set(ids).size).toBe(3);
+    expect(ids.some((id) => id.includes("\u0000"))).toBe(false);
+  });
+
+  it("groups models under their account", () => {
+    const options = modelOptions(accounts);
+    const groups = modelMenuGroups(accounts, options, options[0]?.key ?? null);
+    expect(groups.map((group) => group.title)).toEqual(["Claude", "Grok"]);
+    expect(groups[0]?.subactions?.map((action) => action.title)).toEqual([
+      "Claude Opus 5.5",
+      "Claude Haiku 4.5",
+    ]);
+    expect(groups[0]?.subactions?.[0]?.state).toBe("on");
   });
 });

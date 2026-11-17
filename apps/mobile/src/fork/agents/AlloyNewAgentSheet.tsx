@@ -11,7 +11,7 @@ import { ListSection } from "../../components/ui/ListSection";
 import { Menu } from "../../components/ui/Menu";
 import { AlloyEnvironmentGate, AlloySheet, WithSnapshot } from "./AlloyLayout";
 import { PlacementFields, usePlacement } from "./AlloyGoalFormSheet";
-import { modelChoiceKey, modelLabel, modelOptions } from "./alloy-model";
+import { modelChoiceKey, modelLabel, modelMenuGroups, modelOptions } from "./alloy-model";
 import {
   useAlloyCommand,
   useAlloyEnvironment,
@@ -128,11 +128,7 @@ function ModelPicker(props: {
       subtitle: "Best ranked model with headroom",
       state: selected === AUTO ? "on" : "off",
     },
-    ...options.map((option) => ({
-      id: option.key,
-      title: option.label,
-      state: option.key === selected ? ("on" as const) : ("off" as const),
-    })),
+    ...modelMenuGroups(props.snapshot.accounts, options, selected),
   ];
   return (
     <ListSection>

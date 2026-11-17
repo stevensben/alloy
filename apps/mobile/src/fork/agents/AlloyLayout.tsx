@@ -10,6 +10,7 @@ import { AppBar } from "../../components/ui/AppBar";
 import type { AppBarAction, AppBarConfirm } from "../../components/ui/AppBar.types";
 import { AppText as Text } from "../../components/ui/AppText";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { ListActionRow } from "../../components/ui/ListActionRow";
 import { groupedListInsets } from "../../components/ui/listMetrics";
 import { Progress } from "../../components/ui/Progress";
 import { ScreenContent } from "../../components/ui/ScreenContent";
@@ -164,5 +165,17 @@ export function Muted(props: { readonly children: string; readonly className?: s
     <Text textRole="footnote" className={cn("text-foreground-muted", props.className)}>
       {props.children}
     </Text>
+  );
+}
+
+/** Opens T3's own Add project flow, for when the Alloy server has no projects yet. */
+export function AddProjectRow(props: { readonly environmentId: EnvironmentId }) {
+  const navigation = useNavigation();
+  return (
+    <ListActionRow
+      icon="plus"
+      label="Add a project…"
+      onPress={() => navigation.navigate("AddProject", { environmentId: props.environmentId })}
+    />
   );
 }
