@@ -1,7 +1,12 @@
 # Alloy
 
-Alloy is a fork of T3 Code that adds an Agents view. It otherwise tracks
+Alloy is a fork of T3 Code with its own app identity. It otherwise tracks
 [pingdotgg/t3code](https://github.com/pingdotgg/t3code).
+
+The agent layer that used to live here (goals, roadmaps, proposals, lessons,
+comps, and the Agents view) moved to a separate orchestrator app in November
+2026. Its last version is archived at the tag `archive/alloy-agents-v1`. Alloy
+stays the coding app the orchestrator drives.
 
 ## Why Alloy
 
@@ -12,8 +17,8 @@ say, and when a job counts as done, and shows the agents and the code they
 write in one place.
 
 T3 Code already runs each provider through its official harness on my own
-subscriptions. Alloy builds the agent layer on top and keeps taking T3's
-updates.
+subscriptions. Alloy keeps taking T3's updates, and the orchestrator runs its
+coding sessions here.
 
 ## Rule
 
